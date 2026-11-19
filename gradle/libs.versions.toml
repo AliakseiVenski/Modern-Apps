@@ -154,7 +154,7 @@ ringrtcAndroid = "2.72.1"
 
 # XML
 kxml2 = "2.3.0"
-robolectric = "4.18"
+robolectric = "4.18.1"
 # Plain-JVM mocks for Android framework classes (Application, Context) in unit tests.
 mockito = "5.24.0"
 
