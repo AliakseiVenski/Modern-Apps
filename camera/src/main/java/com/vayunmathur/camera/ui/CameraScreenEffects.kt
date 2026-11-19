@@ -243,7 +243,9 @@ internal fun CameraScreenEffects(
     // manual exposure or night mode makes ZSL unsafe, or safe again (#914). Other kinds ignore it.
     val zslCompatible by viewModel.zslCompatible.collectAsState()
     val zslKey = if (sessionKind == SessionKind.PHOTO) zslCompatible else null
-    LaunchedEffect(cameraMode, lensFacing, selectedLens, sessionKind, useNightPreview, zslKey, state.videoCodec, state.audioInputSource, state.mirrorFront, lifecycleOwner) {
+    // Quality/fps/bitrate/HDR are fixed at bind time as well.
+    val videoTuning by viewModel.videoTuning.collectAsState()
+    LaunchedEffect(cameraMode, lensFacing, selectedLens, sessionKind, useNightPreview, zslKey, state.videoCodec, state.audioInputSource, state.mirrorFront, videoTuning, lifecycleOwner) {
         Log.dev("NightPreview", "CameraScreen session LaunchedEffect START keys zsl=$zslKey lensFacing=$lensFacing selectedLens=${selectedLens?.labelKey} sessionKind=$sessionKind useNightPreview=$useNightPreview codec=${state.videoCodec} audio=${state.audioInputSource} mirror=${state.mirrorFront} lifecycle=${lifecycleOwner.lifecycle.currentState} thread=${Thread.currentThread().name}")
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             Log.dev("NightPreview", "CameraScreen repeatOnLifecycle STARTED – calling teardownSession()")

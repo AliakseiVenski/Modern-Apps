@@ -182,8 +182,10 @@ internal fun CameraViewModel.highestFpsRange(
                 ?: fixed.filter { it.upper <= VIDEO_FPS_STANDARD }.maxByOrNull { it.upper }
                 ?: fixed.minByOrNull { kotlin.math.abs(it.upper - VIDEO_FPS_STANDARD) }
         } else {
-            // For normal VIDEO/TIMELAPSE allow 60fps if available, but still fixed.
-            fixed.firstOrNull { it.upper == VIDEO_FPS_STANDARD }
+            // For normal VIDEO/TIMELAPSE honour the Settings fps (0 = auto), still a fixed range.
+            val wanted = videoTuningMutable.value.fps
+            fixed.firstOrNull { it.upper == wanted }
+                ?: fixed.firstOrNull { it.upper == VIDEO_FPS_STANDARD }
                 ?: fixed.firstOrNull { it.upper == VIDEO_FPS_HIGH }
                 ?: fixed.filter { it.upper <= VIDEO_FPS_STANDARD }.maxByOrNull { it.upper }
                 ?: fixed.filter { it.upper <= VIDEO_FPS_HIGH }.maxByOrNull { it.upper }
@@ -200,6 +202,25 @@ internal fun CameraViewModel.highestFpsRange(
 } catch (e: IllegalArgumentException) {
     Log.status("VideoSession", "Could not query supported frame-rate ranges", e)
     null
+}
+
+/** Fixed fps values (24..60) the lens accepts, for the Settings picker. */
+@Suppress("DEPRECATION")
+@OptIn(ExperimentalCamera2Interop::class)
+internal fun fixedFpsValues(cameraInfo: androidx.camera.core.CameraInfo): List<Int> = try {
+    androidx.camera.camera2.interop.Camera2CameraInfo.from(cameraInfo)
+        .getCameraCharacteristic(
+            android.hardware.camera2.CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES
+        )
+        ?.filter { it.lower == it.upper && it.upper in 24..60 }
+        ?.map { it.upper }?.distinct()?.sorted()
+        ?: emptyList()
+} catch (e: IllegalStateException) {
+    Log.status("VideoSession", "Could not query fixed fps values", e)
+    emptyList()
+} catch (e: IllegalArgumentException) {
+    Log.status("VideoSession", "Could not query fixed fps values", e)
+    emptyList()
 }
 
 /**

@@ -197,6 +197,8 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 }
             }
 
+            VideoTuningSettings(viewModel)
+
             SettingsSection(title = stringResource(R.string.settings_audio_source)) {
                 // Built from [OutlinedButton] + [DropdownMenu] rather than the library's
                 // `ExposedDropdownMenu` wrapper, which currently recurses into itself.

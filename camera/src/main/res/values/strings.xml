@@ -70,6 +70,30 @@
     <!-- Video codec description: most efficient but may not be supported everywhere -->
     <string name="codec_av1_description">Most efficient</string>
 
+    <!-- Video quality settings (SettingsPage) -->
+    <!-- SettingsPage: section header for recording resolution -->
+    <string name="settings_video_resolution" tools:ignore="MissingTranslation">Video resolution</string>
+    <!-- SettingsPage: section header for recording frame rate -->
+    <string name="settings_video_fps" tools:ignore="MissingTranslation">Video frame rate</string>
+    <!-- SettingsPage: section header for the video bitrate slider -->
+    <string name="settings_video_bitrate" tools:ignore="MissingTranslation">Video bitrate</string>
+    <!-- SettingsPage: switch label to let the camera choose the bitrate -->
+    <string name="settings_video_bitrate_auto" tools:ignore="MissingTranslation">Automatic bitrate</string>
+    <!-- SettingsPage: current bitrate value. %1$d = megabits per second -->
+    <string name="settings_video_bitrate_value" tools:ignore="MissingTranslation">%1$d Mbps</string>
+    <!-- SettingsPage: option meaning the camera picks the value itself -->
+    <string name="settings_video_auto" tools:ignore="MissingTranslation">Auto</string>
+    <!-- SettingsPage: frame rate option. %1$d = frames per second -->
+    <string name="settings_video_fps_value" translatable="false">%1$d fps</string>
+    <!-- SettingsPage: HDR video switch title -->
+    <string name="settings_video_hdr" tools:ignore="MissingTranslation">HDR video</string>
+    <!-- SettingsPage: HDR video switch summary -->
+    <string name="settings_video_hdr_description" tools:ignore="MissingTranslation">Record 10-bit HLG when the lens supports it (turn off for standard SDR)</string>
+    <string name="video_quality_uhd" translatable="false">4K (2160p)</string>
+    <string name="video_quality_fhd" translatable="false">1080p</string>
+    <string name="video_quality_hd" translatable="false">720p</string>
+    <string name="video_quality_sd" translatable="false">480p</string>
+
     <!-- Motion-Photo duration settings (SettingsPage, issue #712) -->
     <!-- SettingsPage: section header for motion-photo clip-length selection -->
     <string name="settings_motion_duration">Motion photo length</string>

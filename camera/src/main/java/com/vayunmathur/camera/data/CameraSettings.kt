@@ -6,6 +6,7 @@ import android.net.Uri
 import com.vayunmathur.library.log.Log
 import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.vayunmathur.camera.platform.AspectRatioOption
 import com.vayunmathur.camera.platform.AudioInputSource
@@ -15,6 +16,7 @@ import com.vayunmathur.camera.platform.FlashMode
 import com.vayunmathur.camera.platform.MotionPhotoDuration
 import com.vayunmathur.camera.platform.TimerDuration
 import com.vayunmathur.camera.platform.VideoCodec
+import com.vayunmathur.camera.platform.VideoTuning
 import com.vayunmathur.camera.platform.applyManualControls
 import com.vayunmathur.camera.platform.currentCropAspectRatio
 import com.vayunmathur.camera.platform.registerLevelSensor
@@ -42,6 +44,12 @@ private fun CameraViewModel.loadCaptureSettings() {
             CodecSupport.defaultVideoCodec
         }
     }
+    videoTuningMutable.value = VideoTuning(
+        quality = ds.getString("camera_video_quality")?.takeIf { it.isNotBlank() },
+        fps = ds.getString("camera_video_fps")?.toIntOrNull() ?: 0,
+        bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
+        hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: true,
+    )
     ds.getString("camera_motion_duration")?.let {
         runCatching { motionPhotoDurationMutable.value = MotionPhotoDuration.valueOf(it) }
     }
@@ -140,6 +148,26 @@ fun CameraViewModel.setLocationEnabled(enabled: Boolean) {
 fun CameraViewModel.setVideoCodec(codec: VideoCodec) {
     videoCodecMutable.value = codec
     viewModelScope.launch { ds.setString("camera_video_codec", codec.name) }
+}
+
+fun CameraViewModel.setVideoQuality(name: String?) {
+    videoTuningMutable.update { it.copy(quality = name) }
+    viewModelScope.launch { ds.setString("camera_video_quality", name ?: "") }
+}
+
+fun CameraViewModel.setVideoFps(fps: Int) {
+    videoTuningMutable.update { it.copy(fps = fps) }
+    viewModelScope.launch { ds.setString("camera_video_fps", fps.toString()) }
+}
+
+fun CameraViewModel.setVideoBitrateMbps(mbps: Int) {
+    videoTuningMutable.update { it.copy(bitrateMbps = mbps) }
+    viewModelScope.launch { ds.setString("camera_video_bitrate_mbps", mbps.toString()) }
+}
+
+fun CameraViewModel.setVideoHdr(enabled: Boolean) {
+    videoTuningMutable.update { it.copy(hdr = enabled) }
+    viewModelScope.launch { ds.setString("camera_video_hdr", enabled.toString()) }
 }
 
 /** Motion-Photo clip length (issue #712); applies to the next capture's ring buffer. */

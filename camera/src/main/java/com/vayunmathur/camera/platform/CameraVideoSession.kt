@@ -87,7 +87,8 @@ internal fun CameraViewModel.resolveVideoChoices(cameraInfo: androidx.camera.cor
     // HLG10 (10-bit HDR) when the camera's video pipeline supports it. Uses the default
     // HEVC/H.264 codec (AV1 stays off). Preview and VideoCapture must share the dynamic
     // range or the bind fails, so both are gated together.
-    val hlgSupported = hlgSupportedByCamera(cameraInfo)
+    val tuning = videoTuningMutable.value
+    val hlgSupported = tuning.hdr && hlgSupportedByCamera(cameraInfo)
     Log.debug("VideoSession", "Codec selection: av1=$useAv1, hevc=$useHevc, opus=$useOpus, hlg10=$hlgSupported")
 
     // Cinematic mode enables video stabilization; all video modes always record at max
@@ -97,9 +98,10 @@ internal fun CameraViewModel.resolveVideoChoices(cameraInfo: androidx.camera.cor
     val stabilizationMode = if (cinematic) preferredStabilizationMode(cameraInfo) else null
     Log.debug("VideoSession", "Video tuning: fps=$bestFpsRange, stabilization=$stabilizationMode")
 
-    // Prefer UHD, then FHD, then HD, falling back to the next lower supported quality.
+    // The Settings quality first (null = auto), then UHD, FHD, HD, falling back to the next lower
+    // supported quality.
     val qualitySelector = QualitySelector.fromOrderedList(
-        listOf(Quality.UHD, Quality.FHD, Quality.HD),
+        listOfNotNull(qualityFromName(tuning.quality), Quality.UHD, Quality.FHD, Quality.HD).distinct(),
         FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)
     )
     return VideoChoices(useAv1, useHevc, useOpus, hlgSupported, bestFpsRange, stabilizationMode, qualitySelector)
@@ -267,6 +269,8 @@ internal fun CameraViewModel.buildVideoCapture(
     if (choices.useAv1) recorderBuilder.setVideoMimeType(MediaFormat.MIMETYPE_VIDEO_AV1)
     else if (choices.useHevc) recorderBuilder.setVideoMimeType(MediaFormat.MIMETYPE_VIDEO_HEVC)
     if (choices.useOpus) recorderBuilder.setAudioMimeType(MediaFormat.MIMETYPE_AUDIO_OPUS)
+    val bitrateMbps = videoTuningMutable.value.bitrateMbps
+    if (bitrateMbps > 0) recorderBuilder.setTargetVideoEncodingBitRate(bitrateMbps * 1_000_000)
     val captureBuilder = VideoCapture.Builder(recorderBuilder.build())
         .setMirrorMode(
             if (mirrorFrontMutable.value) MirrorMode.MIRROR_MODE_ON_FRONT_ONLY
