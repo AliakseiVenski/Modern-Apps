@@ -46,6 +46,7 @@ import com.vayunmathur.camera.data.setEdgeSharpeningEnabled
 import com.vayunmathur.camera.data.setLocationEnabled
 import com.vayunmathur.camera.data.setMirrorFront
 import com.vayunmathur.camera.data.setMotionPhotoDuration
+import com.vayunmathur.camera.data.setMotionPhotoEnabled
 import com.vayunmathur.camera.data.setNoiseReductionEnabled
 import com.vayunmathur.camera.data.setSaveTreeUri
 import com.vayunmathur.camera.data.setVideoCodec
@@ -264,6 +265,8 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onNoiseReductionChange = { viewModel.setNoiseReductionEnabled(it) },
                 onEdgeSharpeningChange = { viewModel.setEdgeSharpeningEnabled(it) },
                 onMotionDurationChange = { viewModel.setMotionPhotoDuration(it) },
+                motionPhotoEnabled = viewModel.motionPhotoEnabled.collectAsState().value,
+                onMotionPhotoEnabledChange = { viewModel.setMotionPhotoEnabled(it) },
             )
 
             SettingsSection(title = stringResource(R.string.settings_location)) {

@@ -202,8 +202,17 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     internal val videoOptionsMutable = MutableStateFlow<VideoOptions?>(null)
     val videoOptions = videoOptionsMutable.asStateFlow()
 
+    internal val shutterLockMutable = MutableStateFlow(ShutterLock())
+    val shutterLock = shutterLockMutable.asStateFlow()
+
+    /** Fixed fps the current video bind targets; read by the shutter lock. */
+    @Volatile internal var videoFpsTarget: Int = 0
+
     internal val rememberModeMutable = MutableStateFlow(false)
     val rememberMode = rememberModeMutable.asStateFlow()
+
+    internal val motionPhotoEnabledMutable = MutableStateFlow(true)
+    val motionPhotoEnabled = motionPhotoEnabledMutable.asStateFlow()
 
     // Motion-Photo clip length (issue #712). Default 3s ≈ the old ~1.5s-12-frame buffer.
     internal val motionPhotoDurationMutable = MutableStateFlow(MotionPhotoDuration.THREE)

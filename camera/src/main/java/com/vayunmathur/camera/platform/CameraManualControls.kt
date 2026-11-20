@@ -56,7 +56,27 @@ fun CameraViewModel.applyManualControls() {
     // seeding the un-set one from the last auto-converged value (or a sensible default).
     val manualShutter = CameraViewModel.EXPOSURE_TIME_STOPS[exposureTimeIndexMutable.value].nanos
     val manualIso = manualIso()
-    if (manualShutter != null || manualIso != null) {
+    val lock = shutterLockMutable.value
+    if (lock.enabled && videoCapture != null && videoFpsTarget > 0) {
+        // Experimental fps lock: AE off, exposure time and frame duration both 1/fps, fixed ISO.
+        // Brightness no longer adapts, but the HAL has no room to stretch frames in the dark.
+        val frameNanos = 1_000_000_000L / videoFpsTarget
+        val stops = isoStopsMutable.value
+        val lockedIso = if (stops.isEmpty()) lock.iso else lock.iso.coerceIn(stops.first(), stops.last())
+        builder.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE,
+            android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF
+        )
+        builder.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, frameNanos
+        )
+        builder.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.SENSOR_FRAME_DURATION, frameNanos
+        )
+        builder.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.SENSOR_SENSITIVITY, lockedIso
+        )
+    } else if (manualShutter != null || manualIso != null) {
         val exposure = manualShutter ?: lastAeExposureNanos ?: 16_666_667L // ~1/60s
         val iso = manualIso ?: lastAeIso ?: isoStopsMutable.value.getOrNull(isoStopsMutable.value.size / 2) ?: 400
         builder.setCaptureRequestOption(

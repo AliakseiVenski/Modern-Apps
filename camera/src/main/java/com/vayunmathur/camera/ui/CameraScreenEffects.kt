@@ -130,7 +130,8 @@ internal fun CameraScreenEffects(
     // re-applied to the freshly-bound ImageAnalysis after every (re)bind (mode switch / flip), and
     // on lensFacing + selectedLens to match the DisposableEffect below, which detaches on a
     // flip or lens switch.
-    LaunchedEffect(cameraMode, state.photoSessionActive, lensFacing, selectedLens) {
+    val motionPhotoEnabled by viewModel.motionPhotoEnabled.collectAsState()
+    LaunchedEffect(cameraMode, state.photoSessionActive, lensFacing, selectedLens, motionPhotoEnabled) {
         when {
             cameraMode == CameraMode.SLOW_MO -> {
                 state.maskBitmap = null
@@ -163,8 +164,8 @@ internal fun CameraScreenEffects(
                             PhotoAnalyzer(
                                 onLuminance = { viewModel.onLuminance(it) },
                                 onQrDetected = { viewModel.setQrResult(it) },
-                                // Motion-Photo ring buffer only in plain PHOTO mode.
-                                onMotionFrame = if (cameraMode == CameraMode.PHOTO) {
+                                // Motion-Photo ring buffer only in plain PHOTO mode, when enabled.
+                                onMotionFrame = if (cameraMode == CameraMode.PHOTO && motionPhotoEnabled) {
                                     { bmp, ts, rot -> viewModel.addMotionFrame(bmp, ts, rot) }
                                 } else null
                             )

@@ -16,6 +16,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.R
+import com.vayunmathur.camera.data.setShutterLock
+import com.vayunmathur.camera.data.setShutterLockIso
 import com.vayunmathur.camera.data.setVideoBitrateMbps
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
@@ -34,6 +36,7 @@ import com.vayunmathur.library.ui.Text
 import kotlin.math.roundToInt
 
 private const val DEFAULT_CUSTOM_BITRATE_MBPS = 40
+private val DEFAULT_ISO_CHOICES = listOf(100, 200, 400, 800, 1600, 3200, 6400)
 
 /** Resolution, fps, bitrate and HDR pickers, limited to what the selected lens reports. */
 @Composable
@@ -107,6 +110,30 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
                 title = stringResource(R.string.settings_video_hdr_description),
                 checked = tuning.hdr,
                 onCheckedChange = { viewModel.setVideoHdr(it) },
+            )
+        }
+    }
+
+    ShutterLockSettings(viewModel)
+}
+
+/** Experimental fixed 1/fps shutter with a fixed ISO, to keep the frame rate from dropping in the dark. */
+@Composable
+private fun ShutterLockSettings(viewModel: CameraViewModel) {
+    val lock by viewModel.shutterLock.collectAsState()
+    val isoStops by viewModel.isoStops.collectAsState()
+    SettingsSection(title = stringResource(R.string.settings_shutter_lock)) {
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_shutter_lock_description),
+            checked = lock.enabled,
+            onCheckedChange = { viewModel.setShutterLock(it) },
+        )
+        if (lock.enabled) {
+            ChoiceDropdown(
+                choices = isoStops.ifEmpty { DEFAULT_ISO_CHOICES }
+                    .map { it to stringResource(R.string.settings_iso_value, it) },
+                selected = lock.iso,
+                onSelect = { viewModel.setShutterLockIso(it) },
             )
         }
     }

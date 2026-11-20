@@ -21,6 +21,9 @@ import com.vayunmathur.camera.platform.lensSelector
 import com.vayunmathur.camera.platform.refreshCapabilities
 import com.vayunmathur.camera.data.setFlashMode
 
+/** Assumed fps when no fixed range exists and CameraX picks its own default. */
+private const val VIDEO_FPS_DEFAULT_TARGET = 30
+
 suspend fun CameraViewModel.setupVideoSession(): Boolean {
     return try {
         val session = prepareVideoSession()
@@ -96,6 +99,7 @@ internal fun CameraViewModel.resolveVideoChoices(cameraInfo: androidx.camera.cor
     // quality/fps (no UI picker).
     val cinematic = cameraModeMutable.value == CameraMode.CINEMATIC
     val bestFpsRange = highestFpsRange(cameraInfo)
+    videoFpsTarget = bestFpsRange?.upper ?: VIDEO_FPS_DEFAULT_TARGET
     val stabilizationMode = if (cinematic) preferredStabilizationMode(cameraInfo) else null
     Log.debug("VideoSession", "Video tuning: fps=$bestFpsRange, stabilization=$stabilizationMode")
 

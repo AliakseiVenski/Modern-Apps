@@ -15,10 +15,12 @@ import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.CodecSupport
 import com.vayunmathur.camera.platform.FlashMode
 import com.vayunmathur.camera.platform.MotionPhotoDuration
+import com.vayunmathur.camera.platform.ShutterLock
 import com.vayunmathur.camera.platform.TimerDuration
 import com.vayunmathur.camera.platform.VideoCodec
 import com.vayunmathur.camera.platform.VideoTuning
 import com.vayunmathur.camera.platform.applyManualControls
+import com.vayunmathur.camera.platform.clearMotionFrames
 import com.vayunmathur.camera.platform.currentCropAspectRatio
 import com.vayunmathur.camera.platform.registerLevelSensor
 import com.vayunmathur.camera.platform.unregisterLevelSensor
@@ -51,10 +53,15 @@ private fun CameraViewModel.loadCaptureSettings() {
         bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: true,
     )
+    shutterLockMutable.value = ShutterLock(
+        enabled = ds.getString("camera_shutter_lock")?.toBoolean() ?: false,
+        iso = ds.getString("camera_shutter_lock_iso")?.toIntOrNull() ?: ShutterLock().iso,
+    )
     rememberModeMutable.value = ds.getString("camera_remember_mode")?.toBoolean() ?: false
     if (rememberModeMutable.value) {
         ds.getString("camera_last_mode")?.let { runCatching { cameraModeMutable.value = CameraMode.valueOf(it) } }
     }
+    motionPhotoEnabledMutable.value = ds.getString("camera_motion_enabled")?.toBoolean() ?: true
     ds.getString("camera_motion_duration")?.let {
         runCatching { motionPhotoDurationMutable.value = MotionPhotoDuration.valueOf(it) }
     }
@@ -182,6 +189,24 @@ fun CameraViewModel.setVideoBitrateMbps(mbps: Int) {
 fun CameraViewModel.setVideoHdr(enabled: Boolean) {
     videoTuningMutable.update { it.copy(hdr = enabled) }
     viewModelScope.launch { ds.setString("camera_video_hdr", enabled.toString()) }
+}
+
+fun CameraViewModel.setShutterLock(enabled: Boolean) {
+    shutterLockMutable.update { it.copy(enabled = enabled) }
+    applyManualControls()
+    viewModelScope.launch { ds.setString("camera_shutter_lock", enabled.toString()) }
+}
+
+fun CameraViewModel.setShutterLockIso(iso: Int) {
+    shutterLockMutable.update { it.copy(iso = iso) }
+    applyManualControls()
+    viewModelScope.launch { ds.setString("camera_shutter_lock_iso", iso.toString()) }
+}
+
+fun CameraViewModel.setMotionPhotoEnabled(enabled: Boolean) {
+    motionPhotoEnabledMutable.value = enabled
+    if (!enabled) clearMotionFrames()
+    viewModelScope.launch { ds.setString("camera_motion_enabled", enabled.toString()) }
 }
 
 /** Motion-Photo clip length (issue #712); applies to the next capture's ring buffer. */

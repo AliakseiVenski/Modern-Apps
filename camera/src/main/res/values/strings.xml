@@ -89,6 +89,12 @@
     <string name="settings_video_hdr" tools:ignore="MissingTranslation">HDR video</string>
     <!-- SettingsPage: HDR video switch summary -->
     <string name="settings_video_hdr_description" tools:ignore="MissingTranslation">Record 10-bit HLG when the lens supports it (turn off for standard SDR)</string>
+    <!-- SettingsPage: section header for the experimental shutter lock -->
+    <string name="settings_shutter_lock" tools:ignore="MissingTranslation">Shutter lock (experimental)</string>
+    <!-- SettingsPage: summary for the shutter lock switch -->
+    <string name="settings_shutter_lock_description" tools:ignore="MissingTranslation">Lock exposure time to 1/fps with a fixed ISO so the frame rate cannot drop in the dark. Brightness stops adapting: pick an ISO that suits the light.</string>
+    <!-- SettingsPage: ISO option. %1$d = ISO value -->
+    <string name="settings_iso_value" translatable="false">ISO %1$d</string>
     <string name="video_quality_uhd" translatable="false">4K (2160p)</string>
     <string name="video_quality_fhd" translatable="false">1080p</string>
     <string name="video_quality_hd" translatable="false">720p</string>
@@ -98,6 +104,11 @@
     <string name="settings_remember_mode" tools:ignore="MissingTranslation">Last used mode</string>
     <!-- SettingsPage: summary for the remember-mode switch -->
     <string name="settings_remember_mode_description" tools:ignore="MissingTranslation">Open the camera in the mode you used last (video, portrait, and so on)</string>
+
+    <!-- SettingsPage: section header for the motion photo on/off switch -->
+    <string name="settings_motion_photo" tools:ignore="MissingTranslation">Motion photos</string>
+    <!-- SettingsPage: summary for the motion photo switch -->
+    <string name="settings_motion_photo_description" tools:ignore="MissingTranslation">Save a short video clip with each photo (turn off for plain photos)</string>
 
     <!-- Motion-Photo duration settings (SettingsPage, issue #712) -->
     <!-- SettingsPage: section header for motion-photo clip-length selection -->

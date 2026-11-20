@@ -38,6 +38,8 @@ fun CameraPostProcessingSettings(
     onNoiseReductionChange: (Boolean) -> Unit,
     onEdgeSharpeningChange: (Boolean) -> Unit,
     onMotionDurationChange: (MotionPhotoDuration) -> Unit,
+    motionPhotoEnabled: Boolean = true,
+    onMotionPhotoEnabledChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -57,7 +59,15 @@ fun CameraPostProcessingSettings(
             )
         }
 
-        SettingsSection(title = stringResource(R.string.settings_motion_duration)) {
+        SettingsSection(title = stringResource(R.string.settings_motion_photo)) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_motion_photo_description),
+                checked = motionPhotoEnabled,
+                onCheckedChange = onMotionPhotoEnabledChange,
+            )
+        }
+
+        if (motionPhotoEnabled) SettingsSection(title = stringResource(R.string.settings_motion_duration)) {
             // Built from [OutlinedButton] + [DropdownMenu] like the codec/audio pickers
             // in SettingsPage, rather than the library's `ExposedDropdownMenu` wrapper,
             // which currently recurses into itself.

@@ -176,7 +176,7 @@ internal fun CameraViewModel.stillCaptureIsZsl(): Boolean =
  * single-shot path saves a cropped JPEG.
  */
 private fun CameraViewModel.motionPhotoEligible(): Boolean {
-    val plainPhoto = cameraModeMutable.value == CameraMode.PHOTO && !captureForResult
+    val plainPhoto = motionPhotoEnabledMutable.value && cameraModeMutable.value == CameraMode.PHOTO && !captureForResult
     val noBake = warmthMutable.value == 0f && shadowsMutable.value == 0f
     return plainPhoto && noBake && aspectRatioMutable.value == AspectRatioOption.RATIO_4_3
 }
