@@ -71,7 +71,7 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
         }
     }
 
-    opts.bitrateRangeMbps?.let { range ->
+    opts.bitrateRangeMbps(tuning.quality)?.let { range ->
         SettingsSection(title = stringResource(R.string.settings_video_bitrate)) {
             SettingsSwitchRow(
                 title = stringResource(R.string.settings_video_bitrate_auto),
@@ -83,7 +83,9 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
                 },
             )
             if (tuning.bitrateMbps > 0) {
-                var value by remember(tuning.bitrateMbps) { mutableFloatStateOf(tuning.bitrateMbps.toFloat()) }
+                var value by remember(tuning.bitrateMbps, range) {
+                    mutableFloatStateOf(tuning.bitrateMbps.coerceIn(range.first, range.last).toFloat())
+                }
                 Text(
                     stringResource(R.string.settings_video_bitrate_value, value.roundToInt()),
                     modifier = Modifier.padding(horizontal = 16.dp),

@@ -22,15 +22,39 @@ data class VideoTuning(
 data class VideoOptions(
     val qualities: List<String>,
     val fps: List<Int>,
-    val bitrateRangeMbps: IntRange?,
+    val encoderBitrateMbps: IntRange?,
     val hdrSupported: Boolean,
-)
+) {
+    /** Slider range for the chosen resolution (null = auto, which resolves to the best one). */
+    fun bitrateRangeMbps(qualityPref: String?): IntRange? = encoderBitrateMbps?.let { range ->
+        val high = minOf(range.last, bitrateCapMbps(effectiveQualityName(qualityPref, qualities)))
+        if (high > range.first) range.first..high else null
+    }
+}
 
 private const val MBPS = 1_000_000
 private const val MIN_BITRATE_MBPS = 2
 private const val MAX_BITRATE_MBPS = 200
+private const val UHD_BITRATE_CAP_MBPS = 100
+private const val LOWER_BITRATE_CAP_MBPS = 30
 
 internal val VIDEO_QUALITY_NAMES = listOf("UHD", "FHD", "HD", "SD")
+
+/** The encoder on the target phone stalls above ~21 Mbps at 1080p, so lower resolutions stop at 30. */
+internal fun bitrateCapMbps(quality: String?): Int =
+    if (quality == "UHD") UHD_BITRATE_CAP_MBPS else LOWER_BITRATE_CAP_MBPS
+
+/** The quality a bind will land on: the preference when the lens has it, else the best available. */
+internal fun effectiveQualityName(pref: String?, supported: List<String>): String? =
+    pref?.takeIf { it in supported } ?: supported.firstOrNull()
+
+internal fun supportedQualityNames(info: CameraInfo): List<String> = try {
+    val supported = Recorder.getVideoCapabilities(info).getSupportedQualities(DynamicRange.SDR)
+    VIDEO_QUALITY_NAMES.filter { qualityFromName(it) in supported }
+} catch (e: IllegalStateException) {
+    Log.status("VideoOptions", "Could not query supported qualities", e)
+    emptyList()
+}
 
 internal fun qualityFromName(name: String?): Quality? = when (name) {
     "UHD" -> Quality.UHD
@@ -69,16 +93,10 @@ suspend fun CameraViewModel.refreshVideoOptions() {
         Log.status("VideoOptions", "No camera for the selected lens", e)
         return
     }
-    val supported = try {
-        Recorder.getVideoCapabilities(info).getSupportedQualities(DynamicRange.SDR)
-    } catch (e: IllegalStateException) {
-        Log.status("VideoOptions", "Could not query supported qualities", e)
-        emptyList()
-    }
     videoOptionsMutable.value = VideoOptions(
-        qualities = VIDEO_QUALITY_NAMES.filter { qualityFromName(it) in supported },
+        qualities = supportedQualityNames(info),
         fps = fixedFpsValues(info),
-        bitrateRangeMbps = encoderBitrateRangeMbps(videoCodecMutable.value.mime()),
+        encoderBitrateMbps = encoderBitrateRangeMbps(videoCodecMutable.value.mime()),
         hdrSupported = hlgSupportedByCamera(info),
     )
 }

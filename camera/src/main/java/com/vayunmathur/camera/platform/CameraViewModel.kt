@@ -46,6 +46,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlin.math.atan2
 import com.vayunmathur.camera.data.SaveTarget
 import com.vayunmathur.camera.data.loadSettings
+import com.vayunmathur.camera.data.saveLastMode
 
 /**
  * State and session owner for the single camera screen: the bound CameraX session, every
@@ -200,6 +201,9 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
 
     internal val videoOptionsMutable = MutableStateFlow<VideoOptions?>(null)
     val videoOptions = videoOptionsMutable.asStateFlow()
+
+    internal val rememberModeMutable = MutableStateFlow(false)
+    val rememberMode = rememberModeMutable.asStateFlow()
 
     // Motion-Photo clip length (issue #712). Default 3s ≈ the old ~1.5s-12-frame buffer.
     internal val motionPhotoDurationMutable = MutableStateFlow(MotionPhotoDuration.THREE)
@@ -452,6 +456,10 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     fun enableCaptureForResult(outputUri: Uri?) {
         captureForResult = true
         resultOutputUri = outputUri
+        // A restored video/pano mode would never resolve the caller's intent.
+        if (cameraModeMutable.value != CameraMode.PHOTO && cameraModeMutable.value != CameraMode.PORTRAIT) {
+            cameraModeMutable.value = CameraMode.PHOTO
+        }
     }
 
     internal val panoramaEngine = PanoramaEngine(app)
@@ -627,6 +635,7 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
             }
         }
         cameraModeMutable.value = newMode
+        if (!captureForResult) saveLastMode(newMode)
     }
 
     fun flipCamera() {

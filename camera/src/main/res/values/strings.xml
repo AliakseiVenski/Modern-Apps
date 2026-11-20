@@ -94,6 +94,11 @@
     <string name="video_quality_hd" translatable="false">720p</string>
     <string name="video_quality_sd" translatable="false">480p</string>
 
+    <!-- SettingsPage: section header for reopening in the last used mode -->
+    <string name="settings_remember_mode" tools:ignore="MissingTranslation">Last used mode</string>
+    <!-- SettingsPage: summary for the remember-mode switch -->
+    <string name="settings_remember_mode_description" tools:ignore="MissingTranslation">Open the camera in the mode you used last (video, portrait, and so on)</string>
+
     <!-- Motion-Photo duration settings (SettingsPage, issue #712) -->
     <!-- SettingsPage: section header for motion-photo clip-length selection -->
     <string name="settings_motion_duration">Motion photo length</string>

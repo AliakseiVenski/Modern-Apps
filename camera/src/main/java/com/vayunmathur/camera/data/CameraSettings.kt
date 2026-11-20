@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.vayunmathur.camera.platform.AspectRatioOption
 import com.vayunmathur.camera.platform.AudioInputSource
+import com.vayunmathur.camera.platform.CameraMode
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.CodecSupport
 import com.vayunmathur.camera.platform.FlashMode
@@ -50,6 +51,10 @@ private fun CameraViewModel.loadCaptureSettings() {
         bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: true,
     )
+    rememberModeMutable.value = ds.getString("camera_remember_mode")?.toBoolean() ?: false
+    if (rememberModeMutable.value) {
+        ds.getString("camera_last_mode")?.let { runCatching { cameraModeMutable.value = CameraMode.valueOf(it) } }
+    }
     ds.getString("camera_motion_duration")?.let {
         runCatching { motionPhotoDurationMutable.value = MotionPhotoDuration.valueOf(it) }
     }
@@ -148,6 +153,15 @@ fun CameraViewModel.setLocationEnabled(enabled: Boolean) {
 fun CameraViewModel.setVideoCodec(codec: VideoCodec) {
     videoCodecMutable.value = codec
     viewModelScope.launch { ds.setString("camera_video_codec", codec.name) }
+}
+
+fun CameraViewModel.setRememberMode(enabled: Boolean) {
+    rememberModeMutable.value = enabled
+    viewModelScope.launch { ds.setString("camera_remember_mode", enabled.toString()) }
+}
+
+internal fun CameraViewModel.saveLastMode(mode: CameraMode) {
+    viewModelScope.launch { ds.setString("camera_last_mode", mode.name) }
 }
 
 fun CameraViewModel.setVideoQuality(name: String?) {
