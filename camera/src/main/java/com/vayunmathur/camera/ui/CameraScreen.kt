@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.Route
 import com.vayunmathur.camera.platform.CameraMode
 import com.vayunmathur.camera.platform.CameraViewModel
