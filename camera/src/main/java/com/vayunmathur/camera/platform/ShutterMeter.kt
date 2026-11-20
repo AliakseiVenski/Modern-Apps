@@ -10,7 +10,9 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
 
-private const val METER_INTERVAL_MS = 250L
+/** 20 Hz: small, frequent exposure steps read as a smooth ramp; the controller rate-limits each one. */
+private const val METER_INTERVAL_MS = 50L
+private const val METER_MAX_GAP_MS = 200L
 private const val METER_SAMPLE_STEP = 8
 private const val DEFAULT_SEED_ISO = 400
 
@@ -100,9 +102,10 @@ private fun CameraViewModel.onMeteredLuma(luma: Double) {
     val state = shutterMeter
     val controller = state.controller ?: return
     val now = SystemClock.elapsedRealtime()
-    if (now - state.lastUpdateMs < METER_INTERVAL_MS) return
+    val sinceLastMs = if (state.lastUpdateMs == 0L) METER_INTERVAL_MS else now - state.lastUpdateMs
+    if (sinceLastMs < METER_INTERVAL_MS) return
     state.lastUpdateMs = now
     state.luma.value = luma
-    state.exposure.value = controller.update(luma) ?: return
+    state.exposure.value = controller.update(luma, sinceLastMs.coerceAtMost(METER_MAX_GAP_MS) / 1000.0) ?: return
     ContextCompat.getMainExecutor(app).execute { applyManualControls() }
 }
