@@ -58,17 +58,21 @@ fun CameraViewModel.applyManualControls() {
     val manualIso = manualIso()
     val lock = shutterLockMutable.value
     if (lock.enabled && videoCapture != null && videoFpsTarget > 0) {
-        // Experimental fps lock: AE off, exposure time and frame duration both 1/fps, fixed ISO.
-        // Brightness no longer adapts, but the HAL has no room to stretch frames in the dark.
+        // Shutter lock: AE off and frame duration 1/fps, so the HAL has no room to stretch frames in
+        // the dark. Automatic ISO (lock.iso == 0) takes shutter and ISO from the metering controller
+        // (shutter 1/fps, shorter only when ISO bottoms out); otherwise a fixed ISO at 1/fps.
         val frameNanos = 1_000_000_000L / videoFpsTarget
         val stops = isoStopsMutable.value
-        val lockedIso = if (stops.isEmpty()) lock.iso else lock.iso.coerceIn(stops.first(), stops.last())
+        val metered = shutterMeter.exposure.takeIf { lock.iso == 0 }
+        val fixedIso = (lock.iso.takeIf { it > 0 } ?: FALLBACK_LOCK_ISO)
+            .let { if (stops.isEmpty()) it else it.coerceIn(stops.first(), stops.last()) }
+        val lockedIso = metered?.iso ?: fixedIso
         builder.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE,
             android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF
         )
         builder.setCaptureRequestOption(
-            android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, frameNanos
+            android.hardware.camera2.CaptureRequest.SENSOR_EXPOSURE_TIME, metered?.timeNanos ?: frameNanos
         )
         builder.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.SENSOR_FRAME_DURATION, frameNanos

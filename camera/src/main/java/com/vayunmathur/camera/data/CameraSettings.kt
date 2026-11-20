@@ -55,7 +55,7 @@ private fun CameraViewModel.loadCaptureSettings() {
     )
     shutterLockMutable.value = ShutterLock(
         enabled = ds.getString("camera_shutter_lock")?.toBoolean() ?: false,
-        iso = ds.getString("camera_shutter_lock_iso")?.toIntOrNull() ?: ShutterLock().iso,
+        iso = ds.getString("camera_shutter_lock_iso")?.toIntOrNull() ?: 0,
     )
     rememberModeMutable.value = ds.getString("camera_remember_mode")?.toBoolean() ?: false
     if (rememberModeMutable.value) {

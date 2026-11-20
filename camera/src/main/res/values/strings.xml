@@ -90,9 +90,9 @@
     <!-- SettingsPage: HDR video switch summary -->
     <string name="settings_video_hdr_description" tools:ignore="MissingTranslation">Record 10-bit HLG when the lens supports it (turn off for standard SDR)</string>
     <!-- SettingsPage: section header for the experimental shutter lock -->
-    <string name="settings_shutter_lock" tools:ignore="MissingTranslation">Shutter lock (experimental)</string>
+    <string name="settings_shutter_lock" tools:ignore="MissingTranslation">Shutter lock</string>
     <!-- SettingsPage: summary for the shutter lock switch -->
-    <string name="settings_shutter_lock_description" tools:ignore="MissingTranslation">Lock exposure time to 1/fps with a fixed ISO so the frame rate cannot drop in the dark. Brightness stops adapting: pick an ISO that suits the light.</string>
+    <string name="settings_shutter_lock_description" tools:ignore="MissingTranslation">Lock exposure time to 1/fps so the frame rate cannot drop in the dark. With Auto ISO the camera meters the preview and adjusts ISO; a fixed ISO stops brightness from adapting.</string>
     <!-- SettingsPage: ISO option. %1$d = ISO value -->
     <string name="settings_iso_value" translatable="false">ISO %1$d</string>
     <string name="video_quality_uhd" translatable="false">4K (2160p)</string>

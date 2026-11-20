@@ -18,8 +18,11 @@ data class VideoTuning(
     val hdr: Boolean = true,
 )
 
-/** Experimental: fixed exposure time of 1/fps at a fixed ISO while recording, so fps cannot sag in the dark. */
-data class ShutterLock(val enabled: Boolean = false, val iso: Int = 800)
+/**
+ * Video shutter lock: exposure time of 1/fps so fps cannot sag in the dark. [iso] 0 means
+ * automatic ISO (metered from the preview); a positive value is a fixed ISO.
+ */
+data class ShutterLock(val enabled: Boolean = false, val iso: Int = 0)
 
 /** What the selected lens reports it can record. */
 data class VideoOptions(

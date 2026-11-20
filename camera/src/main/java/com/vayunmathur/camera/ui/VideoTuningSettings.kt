@@ -49,12 +49,7 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
     val auto = stringResource(R.string.settings_video_auto)
 
     if (opts.qualities.isNotEmpty()) {
-        val labels = mapOf(
-            "UHD" to stringResource(R.string.video_quality_uhd),
-            "FHD" to stringResource(R.string.video_quality_fhd),
-            "HD" to stringResource(R.string.video_quality_hd),
-            "SD" to stringResource(R.string.video_quality_sd),
-        )
+        val labels = videoQualityLabels()
         SettingsSection(title = stringResource(R.string.settings_video_resolution)) {
             ChoiceDropdown(
                 choices = listOf<Pair<String?, String>>(null to auto) + opts.qualities.map { it to labels.getValue(it) },
@@ -117,11 +112,21 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
     ShutterLockSettings(viewModel)
 }
 
-/** Experimental fixed 1/fps shutter with a fixed ISO, to keep the frame rate from dropping in the dark. */
+/** Labels for the quality names offered by the lens (shared with the viewfinder quick menu). */
+@Composable
+internal fun videoQualityLabels(): Map<String, String> = mapOf(
+    "UHD" to stringResource(R.string.video_quality_uhd),
+    "FHD" to stringResource(R.string.video_quality_fhd),
+    "HD" to stringResource(R.string.video_quality_hd),
+    "SD" to stringResource(R.string.video_quality_sd),
+)
+
+/** 1/fps shutter lock that keeps the frame rate from dropping in the dark, with automatic or fixed ISO. */
 @Composable
 private fun ShutterLockSettings(viewModel: CameraViewModel) {
     val lock by viewModel.shutterLock.collectAsState()
     val isoStops by viewModel.isoStops.collectAsState()
+    val auto = stringResource(R.string.settings_video_auto)
     SettingsSection(title = stringResource(R.string.settings_shutter_lock)) {
         SettingsSwitchRow(
             title = stringResource(R.string.settings_shutter_lock_description),
@@ -130,7 +135,7 @@ private fun ShutterLockSettings(viewModel: CameraViewModel) {
         )
         if (lock.enabled) {
             ChoiceDropdown(
-                choices = isoStops.ifEmpty { DEFAULT_ISO_CHOICES }
+                choices = listOf(0 to auto) + isoStops.ifEmpty { DEFAULT_ISO_CHOICES }
                     .map { it to stringResource(R.string.settings_iso_value, it) },
                 selected = lock.iso,
                 onSelect = { viewModel.setShutterLockIso(it) },

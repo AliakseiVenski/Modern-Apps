@@ -82,6 +82,7 @@ fun CameraViewModel.teardownSession() {
     } catch (e: IllegalStateException) {
         Log.error("NightPreview", "teardownSession() unbindAll FAILED (was hidden)", e)
     }
+    stopShutterMeter()
     boundCamera = null
     imageCapture = null
     imageAnalysis = null

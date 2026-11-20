@@ -126,14 +126,21 @@ internal fun CameraViewModel.bindVideoLadder(session: VideoSessionPrep) {
     var bound: Camera? = null
     var videoBoundLensId: String? = null
     var lastError: Exception? = null
-    for ((hlg, snapshot) in videoAttempts(session.choices.hlgSupported)) {
-        val rung = tryVideoRungSet(session, hlg, snapshot)
-        lastError = rung.lastError ?: lastError
-        if (rung.bound != null) {
-            videoBoundLensId = rung.lensId
-            bound = rung.bound
-            break
+    // The automatic shutter lock needs a metering stream. When no rung can bind it, a second pass
+    // binds without it and the lock falls back to a fixed ISO.
+    val meterPasses = if (shutterMeterWanted()) listOf(true, false) else listOf(false)
+    for (meter in meterPasses) {
+        shutterMeter.requested = meter
+        for ((hlg, snapshot) in videoAttempts(session.choices.hlgSupported)) {
+            val rung = tryVideoRungSet(session, hlg, snapshot)
+            lastError = rung.lastError ?: lastError
+            if (rung.bound != null) {
+                videoBoundLensId = rung.lensId
+                bound = rung.bound
+                break
+            }
         }
+        if (bound != null) break
     }
     boundCamera = bound ?: throw (lastError ?: IllegalStateException("Video session bind failed"))
     boundLensIdField = videoBoundLensId
@@ -233,20 +240,25 @@ internal fun CameraViewModel.bindVideoUseCases(
         else androidx.camera.core.DynamicRange.SDR
     val preview = buildVideoPreview(session, dynamicRange)
     val capture = buildVideoCapture(session, dynamicRange)
-    return if (snapshot) {
+    // The metering stream replaces the snapshot use case: four streams would not bind at 4K60.
+    val meter = if (shutterMeter.requested) buildMeterAnalysis() else null
+    shutterMeter.analysis = meter
+    val still = if (snapshot && meter == null) {
         // Extra ImageCapture use case enables taking a still while recording (SDR JPEG).
         // Crop matches the still aspect ratio like the photo session, or snapshots
         // always save full-frame while the preview shows cropped.
-        val still = ImageCapture.Builder()
+        ImageCapture.Builder()
             .setFlashMode(ImageCapture.FLASH_MODE_OFF)
             .build()
-        imageCapture = still
-        still.setCropAspectRatio(currentCropAspectRatio())
-        bindSession(session.provider, session.owner, lensSelector, preview, capture, still)
+            .also { it.setCropAspectRatio(currentCropAspectRatio()) }
     } else {
-        imageCapture = null
-        bindSession(session.provider, session.owner, lensSelector, preview, capture)
+        null
     }
+    imageCapture = still
+    return bindSession(
+        session.provider, session.owner, lensSelector,
+        *listOfNotNull(preview, capture, still, meter).toTypedArray()
+    )
 }
 
 /** Builds the video preview with the shared dynamic range + capture options. */
@@ -302,5 +314,6 @@ internal fun CameraViewModel.buildVideoCapture(
 internal suspend fun CameraViewModel.finishVideoSession() {
     videoSnapshotSupportedMutable.value = imageCapture != null
     boundCamera?.let { refreshCapabilities(it, boundLensIdField) }
+    startShutterMeter()
     videoSessionActiveMutable.value = true
 }

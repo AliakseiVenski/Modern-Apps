@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +34,7 @@ import com.vayunmathur.camera.R
 import com.vayunmathur.camera.platform.AspectRatioOption
 import com.vayunmathur.camera.platform.FlashMode
 import com.vayunmathur.camera.platform.TimerDuration
+import com.vayunmathur.library.ui.DropdownMenu
 import com.vayunmathur.library.ui.IconButton
 import com.vayunmathur.library.ui.IconFlashAuto
 import com.vayunmathur.library.ui.IconFlashOff
@@ -40,6 +45,7 @@ import com.vayunmathur.library.ui.IconMic
 import com.vayunmathur.library.ui.IconMicOff
 import com.vayunmathur.library.ui.IconTimer
 import com.vayunmathur.library.ui.IconToolsLevel
+import com.vayunmathur.library.ui.IconTune
 import com.vayunmathur.library.ui.Text
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -63,7 +69,8 @@ internal fun CameraTopBar(
     onAspectCycle: () -> Unit,
     onMicToggle: () -> Unit,
     onTimerCycle: () -> Unit,
-    iconRotation: Float
+    iconRotation: Float,
+    videoQuickMenu: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -181,6 +188,20 @@ internal fun CameraTopBar(
             ) {
                 if (micMuted) IconMicOff(Modifier.size(22.dp).rotate(iconRotation), Color.White)
                 else IconMic(Modifier.size(22.dp).rotate(iconRotation), Color.White)
+            }
+            if (videoQuickMenu != null) {
+                var menuOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        videoQuickMenu()
+                    }
+                }
             }
         }
     }
