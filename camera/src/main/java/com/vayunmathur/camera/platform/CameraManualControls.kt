@@ -63,7 +63,7 @@ fun CameraViewModel.applyManualControls() {
         // (shutter 1/fps, shorter only when ISO bottoms out); otherwise a fixed ISO at 1/fps.
         val frameNanos = 1_000_000_000L / videoFpsTarget
         val stops = isoStopsMutable.value
-        val metered = shutterMeter.exposure.takeIf { lock.iso == 0 }
+        val metered = shutterMeter.exposure.value.takeIf { lock.iso == 0 }
         val fixedIso = (lock.iso.takeIf { it > 0 } ?: FALLBACK_LOCK_ISO)
             .let { if (stops.isEmpty()) it else it.coerceIn(stops.first(), stops.last()) }
         val lockedIso = metered?.iso ?: fixedIso

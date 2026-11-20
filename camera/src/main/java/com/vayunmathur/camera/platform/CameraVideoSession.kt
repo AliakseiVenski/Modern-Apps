@@ -142,6 +142,9 @@ internal fun CameraViewModel.bindVideoLadder(session: VideoSessionPrep) {
         }
         if (bound != null) break
     }
+    if (bound != null && shutterMeterWanted() && !shutterMeter.requested) {
+        Log.status("VideoSession", "Shutter meter stream could not bind; the lock falls back to a fixed ISO")
+    }
     boundCamera = bound ?: throw (lastError ?: IllegalStateException("Video session bind failed"))
     boundLensIdField = videoBoundLensId
 }
@@ -255,9 +258,29 @@ internal fun CameraViewModel.bindVideoUseCases(
         null
     }
     imageCapture = still
+    debug.bind.value = videoBindSummary(session.provider.getCameraInfo(lensSelector), choices, hlg)
     return bindSession(
         session.provider, session.owner, lensSelector,
         *listOfNotNull(preview, capture, still, meter).toTypedArray()
+    )
+}
+
+/** What this bind asks for, for the debug overlay: the quality's resolution, codec, HDR and bitrate. */
+private fun CameraViewModel.videoBindSummary(
+    info: androidx.camera.core.CameraInfo,
+    choices: VideoChoices,
+    hlg: Boolean
+): VideoBindSummary {
+    val quality = qualityFromName(
+        effectiveQualityName(videoTuningMutable.value.quality, supportedQualityNames(info))
+    )
+    val size = quality?.let { QualitySelector.getResolution(info, it) }
+    return VideoBindSummary(
+        resolution = size?.let { "${it.width}x${it.height}" },
+        codec = if (choices.useAv1) "AV1" else if (choices.useHevc) "HEVC" else "AVC",
+        hdr = hlg,
+        bitrateMbps = choices.bitrateMbps,
+        fpsTarget = videoFpsTarget,
     )
 }
 
@@ -273,6 +296,7 @@ internal fun CameraViewModel.buildVideoPreview(
         session.choices.bestFpsRange,
         session.choices.stabilizationMode
     )
+    attachDebugCallback(previewBuilder)
     val preview = previewBuilder.build()
     preview.setSurfaceProvider { request -> surfaceRequestMutable.value = request }
     return preview

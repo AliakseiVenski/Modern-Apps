@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -52,6 +56,8 @@ fun CameraScreen(
 ) {
     val view = LocalView.current
     val state = rememberCameraScreenState(viewModel)
+    var quickMenuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(state.cameraMode) { quickMenuOpen = false }
 
     // The shutter action, shared by the on-screen button and the volume-key (hardware) shutter.
     val performCapture: () -> Unit = {
@@ -108,8 +114,7 @@ fun CameraScreen(
             val focusTopPadding = maxHeight * 0.12f
             Column(modifier = Modifier.fillMaxSize()) {
                 // Changing these rebinds the session, which would end a recording; Slo-Mo has its own path.
-                val videoQuickMenu: (@Composable () -> Unit)? =
-                    if (state.isRecording || state.isSloMo) null else { { VideoQuickMenu(viewModel) } }
+                val quickMenuAllowed = !state.isRecording && !state.isSloMo
                 CameraTopBar(
                     flashMode = state.flashMode,
                     torchEnabled = state.torchEnabled,
@@ -150,7 +155,8 @@ fun CameraScreen(
                         viewModel.setTimerDuration(next)
                     },
                     iconRotation = animatedRotation,
-                    videoQuickMenu = videoQuickMenu
+                    onVideoQuickMenu = if (quickMenuAllowed) ({ quickMenuOpen = !quickMenuOpen }) else null,
+                    videoQuickMenuOpen = quickMenuOpen
                 )
 
                 BoxWithConstraints(
@@ -165,6 +171,12 @@ fun CameraScreen(
                         viewModel = viewModel,
                         animatedRotation = animatedRotation,
                     )
+                    if (state.isVideoType) {
+                        DebugOverlay(viewModel, Modifier.align(Alignment.TopStart).padding(8.dp))
+                    }
+                    if (quickMenuOpen && quickMenuAllowed) {
+                        VideoQuickMenu(viewModel) { quickMenuOpen = false }
+                    }
                 }
 
                 CameraBottomControls(

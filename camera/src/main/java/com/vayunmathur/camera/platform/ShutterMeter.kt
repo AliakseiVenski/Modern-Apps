@@ -8,6 +8,7 @@ import com.vayunmathur.camera.domain.ExposureSetting
 import com.vayunmathur.camera.domain.ShutterPriorityController
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private const val METER_INTERVAL_MS = 250L
 private const val METER_SAMPLE_STEP = 8
@@ -22,7 +23,11 @@ internal class ShutterMeterState {
     var requested = false
     var analysis: ImageAnalysis? = null
     @Volatile var controller: ShutterPriorityController? = null
-    @Volatile var exposure: ExposureSetting? = null
+    /** The exposure the controller currently asks for; null when no metering stream is bound. */
+    val exposure = MutableStateFlow<ExposureSetting?>(null)
+
+    /** Latest metered mean luma, published at the controller's rate for the debug overlay. */
+    val luma = MutableStateFlow<Double?>(null)
     var lastUpdateMs = 0L
     val executor: ExecutorService by lazy {
         Executors.newSingleThreadExecutor { Thread(it, "shutter-meter").apply { isDaemon = true } }
@@ -65,7 +70,7 @@ internal fun buildMeterAnalysis(): ImageAnalysis =
 internal fun CameraViewModel.startShutterMeter() {
     val state = shutterMeter
     state.controller = null
-    state.exposure = null
+    state.exposure.value = null
     val analysis = state.analysis ?: return
     val fps = videoFpsTarget.takeIf { it > 0 } ?: return
     val stops = isoStopsMutable.value
@@ -77,7 +82,7 @@ internal fun CameraViewModel.startShutterMeter() {
     else ExposureSetting(frameNanos, DEFAULT_SEED_ISO)
     val controller = ShutterPriorityController(frameNanos, stops.first(), stops.last(), seed)
     state.controller = controller
-    state.exposure = controller.current
+    state.exposure.value = controller.current
     analysis.setAnalyzer(state.executor, LumaMeter { luma -> onMeteredLuma(luma) })
     applyManualControls()
 }
@@ -87,7 +92,8 @@ internal fun CameraViewModel.stopShutterMeter() {
     state.analysis?.clearAnalyzer()
     state.analysis = null
     state.controller = null
-    state.exposure = null
+    state.exposure.value = null
+    state.luma.value = null
 }
 
 private fun CameraViewModel.onMeteredLuma(luma: Double) {
@@ -96,6 +102,7 @@ private fun CameraViewModel.onMeteredLuma(luma: Double) {
     val now = SystemClock.elapsedRealtime()
     if (now - state.lastUpdateMs < METER_INTERVAL_MS) return
     state.lastUpdateMs = now
-    state.exposure = controller.update(luma) ?: return
+    state.luma.value = luma
+    state.exposure.value = controller.update(luma) ?: return
     ContextCompat.getMainExecutor(app).execute { applyManualControls() }
 }

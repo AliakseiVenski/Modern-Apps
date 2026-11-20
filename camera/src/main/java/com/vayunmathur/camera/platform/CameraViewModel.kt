@@ -206,6 +206,7 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     val shutterLock = shutterLockMutable.asStateFlow()
 
     internal val shutterMeter = ShutterMeterState()
+    internal val debug = DebugOverlayState()
 
     /** Fixed fps the current video bind targets; read by the shutter lock. */
     @Volatile internal var videoFpsTarget: Int = 0

@@ -55,8 +55,9 @@ private fun CameraViewModel.loadCaptureSettings() {
     )
     shutterLockMutable.value = ShutterLock(
         enabled = ds.getString("camera_shutter_lock")?.toBoolean() ?: false,
-        iso = ds.getString("camera_shutter_lock_iso")?.toIntOrNull() ?: 0,
+        iso = ds.getString("camera_shutter_iso")?.toIntOrNull() ?: 0,
     )
+    debug.enabled.value = ds.getString("camera_debug_overlay")?.toBoolean() ?: false
     rememberModeMutable.value = ds.getString("camera_remember_mode")?.toBoolean() ?: false
     if (rememberModeMutable.value) {
         ds.getString("camera_last_mode")?.let { runCatching { cameraModeMutable.value = CameraMode.valueOf(it) } }
@@ -162,6 +163,11 @@ fun CameraViewModel.setVideoCodec(codec: VideoCodec) {
     viewModelScope.launch { ds.setString("camera_video_codec", codec.name) }
 }
 
+fun CameraViewModel.setDebugOverlay(enabled: Boolean) {
+    debug.enabled.value = enabled
+    viewModelScope.launch { ds.setString("camera_debug_overlay", enabled.toString()) }
+}
+
 fun CameraViewModel.setRememberMode(enabled: Boolean) {
     rememberModeMutable.value = enabled
     viewModelScope.launch { ds.setString("camera_remember_mode", enabled.toString()) }
@@ -200,7 +206,7 @@ fun CameraViewModel.setShutterLock(enabled: Boolean) {
 fun CameraViewModel.setShutterLockIso(iso: Int) {
     shutterLockMutable.update { it.copy(iso = iso) }
     applyManualControls()
-    viewModelScope.launch { ds.setString("camera_shutter_lock_iso", iso.toString()) }
+    viewModelScope.launch { ds.setString("camera_shutter_iso", iso.toString()) }
 }
 
 fun CameraViewModel.setMotionPhotoEnabled(enabled: Boolean) {

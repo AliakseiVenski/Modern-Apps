@@ -199,6 +199,7 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
             }
 
             RememberModeSetting(viewModel)
+            DebugOverlaySetting(viewModel)
             VideoTuningSettings(viewModel)
 
             SettingsSection(title = stringResource(R.string.settings_audio_source)) {

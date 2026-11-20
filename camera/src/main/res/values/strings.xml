@@ -93,6 +93,24 @@
     <string name="settings_shutter_lock" tools:ignore="MissingTranslation">Shutter lock</string>
     <!-- SettingsPage: summary for the shutter lock switch -->
     <string name="settings_shutter_lock_description" tools:ignore="MissingTranslation">Lock exposure time to 1/fps so the frame rate cannot drop in the dark. With Auto ISO the camera meters the preview and adjusts ISO; a fixed ISO stops brightness from adapting.</string>
+    <!-- SettingsPage and quick menu: debug overlay switch -->
+    <string name="settings_debug_overlay" tools:ignore="MissingTranslation">Debug overlay</string>
+    <!-- Summary for the debug overlay switch -->
+    <string name="settings_debug_overlay_description" tools:ignore="MissingTranslation">Show live fps, ISO, shutter, lens and encoder info on the viewfinder while in video modes</string>
+    <!-- Quick menu: subtitle under the debug overlay switch -->
+    <string name="settings_debug_overlay_short" tools:ignore="MissingTranslation">Live fps, ISO, shutter and lens</string>
+    <!-- Viewfinder quick menu: title of the floating video panel -->
+    <string name="quick_menu_title" tools:ignore="MissingTranslation">Video</string>
+    <!-- Quick menu: subtitle under the shutter lock switch -->
+    <string name="settings_shutter_lock_short" tools:ignore="MissingTranslation">Keeps the frame rate steady in the dark</string>
+    <!-- Quick menu: subtitle under the HDR switch -->
+    <string name="settings_video_hdr_short" tools:ignore="MissingTranslation">10-bit HLG when the lens supports it</string>
+    <!-- Quick menu: label of the ISO chips -->
+    <string name="settings_shutter_iso" translatable="false">ISO</string>
+    <!-- Quick menu: live exposure readout. %1$d = shutter denominator, %2$d = ISO -->
+    <string name="settings_shutter_readout" translatable="false">1/%1$d · ISO %2$d</string>
+    <!-- Quick menu: shown when the metering stream could not bind. %1$d = fixed ISO in use -->
+    <string name="settings_shutter_meter_unavailable" tools:ignore="MissingTranslation">Auto ISO unavailable · ISO %1$d</string>
     <!-- SettingsPage: ISO option. %1$d = ISO value -->
     <string name="settings_iso_value" translatable="false">ISO %1$d</string>
     <string name="video_quality_uhd" translatable="false">4K (2160p)</string>

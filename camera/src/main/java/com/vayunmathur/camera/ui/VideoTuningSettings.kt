@@ -36,7 +36,7 @@ import com.vayunmathur.library.ui.Text
 import kotlin.math.roundToInt
 
 private const val DEFAULT_CUSTOM_BITRATE_MBPS = 40
-private val DEFAULT_ISO_CHOICES = listOf(100, 200, 400, 800, 1600, 3200, 6400)
+internal val DEFAULT_ISO_CHOICES = listOf(100, 200, 400, 800, 1600, 3200, 6400)
 
 /** Resolution, fps, bitrate and HDR pickers, limited to what the selected lens reports. */
 @Composable
