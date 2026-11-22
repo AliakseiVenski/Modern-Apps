@@ -95,11 +95,10 @@ internal fun BottomBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Spacer(Modifier.width(16.dp))
         Box(
             modifier = Modifier
                 .size(44.dp)
@@ -112,7 +111,7 @@ internal fun BottomBar(
                 modifier = Modifier.size(22.dp).rotate(iconRotation)
             )
         }
-        Spacer(Modifier.weight(1f))
+
         Row(
             modifier = Modifier
                 .background(Color(0xFF3C3C3C), RoundedCornerShape(20.dp))
@@ -138,7 +137,6 @@ internal fun BottomBar(
                 IconVideoCamera(Modifier.size(20.dp).rotate(iconRotation), if (videoPickerEnabled) Color.White else Color(0xFF777777))
             }
         }
-        Spacer(Modifier.weight(1f))
 
         if (isVideoType && onVideoQuickMenu != null) {
             Box(
@@ -151,7 +149,7 @@ internal fun BottomBar(
                 IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
             }
         } else {
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.size(44.dp))
         }
     }
 }
