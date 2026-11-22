@@ -185,7 +185,6 @@ fun CameraScreen(
                     onCapture = { currentCapture() },
                     animatedRotation = animatedRotation,
                     onVideoQuickMenu = if (quickMenuAllowed) ({ quickMenuOpen = !quickMenuOpen }) else null,
-                    videoQuickMenuOpen = quickMenuOpen,
                 )
             }
 

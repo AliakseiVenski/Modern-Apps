@@ -33,6 +33,5 @@ internal fun CameraModesPane(
         videoPickerEnabled = videoPickerEnabled,
         isVideoType = !isPhotoType,
         onVideoQuickMenu = onVideoQuickMenu,
-        videoQuickMenuOpen = videoQuickMenuOpen,
     )
 }

@@ -90,7 +90,6 @@ internal fun BottomBar(
     videoPickerEnabled: Boolean = true,
     isVideoType: Boolean = false,
     onVideoQuickMenu: (() -> Unit)? = null,
-    videoQuickMenuOpen: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -141,12 +140,15 @@ internal fun BottomBar(
         }
 
         if (isVideoType && onVideoQuickMenu != null) {
-            val menuBg = if (videoQuickMenuOpen) Color(0xFF3C3C3C) else Color.Transparent
-            IconButton(
-                onClick = onVideoQuickMenu,
+            // Same always-on grey circle as the settings gear: this button used to
+            // only show its circle while the panel was open, which looked unfilled
+            // next to the gear.
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(menuBg, CircleShape)
+                    .size(44.dp)
+                    .background(Color(0xFF3C3C3C), CircleShape)
+                    .clickable(onClick = onVideoQuickMenu),
+                contentAlignment = Alignment.Center
             ) {
                 IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
             }
