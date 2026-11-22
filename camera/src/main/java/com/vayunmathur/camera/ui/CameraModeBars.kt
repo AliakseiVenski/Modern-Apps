@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.vayunmathur.library.ui.IconCamera
@@ -94,10 +95,11 @@ internal fun BottomBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Spacer(Modifier.width(16.dp))
         Box(
             modifier = Modifier
                 .size(44.dp)
@@ -110,7 +112,7 @@ internal fun BottomBar(
                 modifier = Modifier.size(22.dp).rotate(iconRotation)
             )
         }
-
+        Spacer(Modifier.weight(1f))
         Row(
             modifier = Modifier
                 .background(Color(0xFF3C3C3C), RoundedCornerShape(20.dp))
@@ -130,19 +132,15 @@ internal fun BottomBar(
                 modifier = Modifier
                     .size(36.dp)
                     .selectedPill(!isPhotoType, CircleShape, Color(0xFF5C5C5C))
-                    // IMAGE_CAPTURE callers wait on a still: the video picker stays disabled so
-                    // the user can't enter a mode whose shutter never resolves the intent.
                     .clickable(enabled = videoPickerEnabled) { if (isPhotoType) onPickerChanged(false) },
                 contentAlignment = Alignment.Center
             ) {
                 IconVideoCamera(Modifier.size(20.dp).rotate(iconRotation), if (videoPickerEnabled) Color.White else Color(0xFF777777))
             }
         }
+        Spacer(Modifier.weight(1f))
 
         if (isVideoType && onVideoQuickMenu != null) {
-            // Same always-on grey circle as the settings gear: this button used to
-            // only show its circle while the panel was open, which looked unfilled
-            // next to the gear.
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -153,7 +151,7 @@ internal fun BottomBar(
                 IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
             }
         } else {
-            Spacer(Modifier.size(44.dp))
+            Spacer(Modifier.width(16.dp))
         }
     }
 }
