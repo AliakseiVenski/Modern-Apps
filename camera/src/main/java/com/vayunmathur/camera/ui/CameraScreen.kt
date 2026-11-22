@@ -114,7 +114,6 @@ fun CameraScreen(
             val indicatorTopPadding = maxHeight * 0.07f
             val focusTopPadding = maxHeight * 0.12f
             Column(modifier = Modifier.fillMaxSize()) {
-                // Changing these rebinds the session, which would end a recording; Slo-Mo has its own path.
                 val quickMenuAllowed = !state.isRecording && !state.isSloMo
                 CameraTopBar(
                     flashMode = state.flashMode,
@@ -156,8 +155,6 @@ fun CameraScreen(
                         viewModel.setTimerDuration(next)
                     },
                     iconRotation = animatedRotation,
-                    onVideoQuickMenu = if (quickMenuAllowed) ({ quickMenuOpen = !quickMenuOpen }) else null,
-                    videoQuickMenuOpen = quickMenuOpen
                 )
 
                 BoxWithConstraints(
@@ -187,6 +184,8 @@ fun CameraScreen(
                     onCaptureResult = onCaptureResult,
                     onCapture = { currentCapture() },
                     animatedRotation = animatedRotation,
+                    onVideoQuickMenu = if (quickMenuAllowed) ({ quickMenuOpen = !quickMenuOpen }) else null,
+                    videoQuickMenuOpen = quickMenuOpen,
                 )
             }
 

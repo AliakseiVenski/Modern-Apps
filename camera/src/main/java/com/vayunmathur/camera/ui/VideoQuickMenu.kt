@@ -80,7 +80,7 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
         Surface(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.TopCenter)
                 .padding(12.dp)
                 .widthIn(max = 440.dp)
                 .fillMaxWidth()

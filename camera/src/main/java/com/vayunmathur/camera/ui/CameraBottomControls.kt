@@ -32,6 +32,8 @@ internal fun CameraBottomControls(
     onCaptureResult: ((Bitmap?) -> Unit)?,
     onCapture: () -> Unit,
     animatedRotation: Float,
+    onVideoQuickMenu: (() -> Unit)? = null,
+    videoQuickMenuOpen: Boolean = false,
 ) {
     val context = LocalContext.current
     val cameraMode = state.cameraMode
@@ -117,6 +119,8 @@ internal fun CameraBottomControls(
                 onPickerChanged = onPickerChanged,
                 onSettingsClick = { backStack.add(Route.Settings) },
                 videoPickerEnabled = onCaptureResult == null,
+                onVideoQuickMenu = onVideoQuickMenu,
+                videoQuickMenuOpen = videoQuickMenuOpen,
             )
         },
         sideBySide = expandedSide,

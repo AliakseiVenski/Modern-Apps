@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.vayunmathur.library.ui.IconCamera
 import com.vayunmathur.library.ui.IconVideoCamera
 import com.vayunmathur.library.ui.IconSettings
+import com.vayunmathur.library.ui.IconTune
+import com.vayunmathur.library.ui.IconButton
 import com.vayunmathur.library.ui.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -86,6 +88,9 @@ internal fun BottomBar(
     onPickerChanged: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
     videoPickerEnabled: Boolean = true,
+    isVideoType: Boolean = false,
+    onVideoQuickMenu: (() -> Unit)? = null,
+    videoQuickMenuOpen: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -135,6 +140,18 @@ internal fun BottomBar(
             }
         }
 
-        Spacer(Modifier.size(44.dp))
+        if (isVideoType && onVideoQuickMenu != null) {
+            val menuBg = if (videoQuickMenuOpen) Color(0xFF3C3C3C) else Color.Transparent
+            IconButton(
+                onClick = onVideoQuickMenu,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(menuBg, CircleShape)
+            ) {
+                IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
+            }
+        } else {
+            Spacer(Modifier.size(44.dp))
+        }
     }
 }

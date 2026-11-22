@@ -40,7 +40,6 @@ import com.vayunmathur.library.ui.IconMic
 import com.vayunmathur.library.ui.IconMicOff
 import com.vayunmathur.library.ui.IconTimer
 import com.vayunmathur.library.ui.IconToolsLevel
-import com.vayunmathur.library.ui.IconTune
 import com.vayunmathur.library.ui.Text
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -64,9 +63,7 @@ internal fun CameraTopBar(
     onAspectCycle: () -> Unit,
     onMicToggle: () -> Unit,
     onTimerCycle: () -> Unit,
-    iconRotation: Float,
-    onVideoQuickMenu: (() -> Unit)? = null,
-    videoQuickMenuOpen: Boolean = false
+    iconRotation: Float
 ) {
     Row(
         modifier = Modifier
@@ -184,17 +181,6 @@ internal fun CameraTopBar(
             ) {
                 if (micMuted) IconMicOff(Modifier.size(22.dp).rotate(iconRotation), Color.White)
                 else IconMic(Modifier.size(22.dp).rotate(iconRotation), Color.White)
-            }
-            if (onVideoQuickMenu != null) {
-                val menuBg = if (videoQuickMenuOpen) Color(0xFF3C3C3C) else Color.Transparent
-                IconButton(
-                    onClick = onVideoQuickMenu,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(menuBg, CircleShape)
-                ) {
-                    IconTune(Modifier.size(22.dp).rotate(iconRotation), Color.White)
-                }
             }
         }
     }
