@@ -100,7 +100,7 @@ internal fun CameraViewModel.resolveVideoChoices(cameraInfo: androidx.camera.cor
     val cinematic = cameraModeMutable.value == CameraMode.CINEMATIC
     val bestFpsRange = highestFpsRange(cameraInfo)
     videoFpsTarget = bestFpsRange?.upper ?: VIDEO_FPS_DEFAULT_TARGET
-    val stabilizationMode = if (cinematic) preferredStabilizationMode(cameraInfo) else null
+    val stabilizationMode = if (cinematic || tuning.stabilizationEnabled) preferredStabilizationMode(cameraInfo) else null
     Log.debug("VideoSession", "Video tuning: fps=$bestFpsRange, stabilization=$stabilizationMode")
 
     // The Settings quality first (null = auto), then UHD, FHD, HD, falling back to the next lower

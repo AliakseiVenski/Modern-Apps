@@ -270,6 +270,8 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onMotionPhotoEnabledChange = { viewModel.setMotionPhotoEnabled(it) },
             )
 
+            CustomZoomSettings(viewModel)
+
             SettingsSection(title = stringResource(R.string.settings_location)) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.settings_location_description),

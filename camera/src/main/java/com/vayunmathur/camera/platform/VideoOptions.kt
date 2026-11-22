@@ -16,6 +16,7 @@ data class VideoTuning(
     val fps: Int = 0,
     val bitrateMbps: Int = 0,
     val hdr: Boolean = true,
+    val stabilizationEnabled: Boolean = true,
 )
 
 /**

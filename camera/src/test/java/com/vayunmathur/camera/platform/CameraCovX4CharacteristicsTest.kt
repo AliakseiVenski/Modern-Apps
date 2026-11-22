@@ -256,12 +256,12 @@ class CameraCovX4CharacteristicsTest {
         return cameraInfo("fps", characteristics(*entries.toTypedArray()))
     }
 
-    @Test fun highestFpsRangePrefersFixedThirtyThenSixty() {
+    @Test fun highestFpsRangePrefersFixedSixtyThenThirty() {
         val viewModel = vm()
         val mixed = fpsInfo(
             arrayOf(Range(10, 30), Range(60, 60), Range(30, 30), Range(24, 24)), null,
         )
-        assertEquals(Range(30, 30), viewModel.highestFpsRange(mixed))
+        assertEquals(Range(60, 60), viewModel.highestFpsRange(mixed))
         viewModel.cameraModeMutable.value = CameraMode.CINEMATIC
         assertEquals(Range(30, 30), viewModel.highestFpsRange(mixed))
         viewModel.cameraModeMutable.value = CameraMode.VIDEO

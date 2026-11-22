@@ -105,6 +105,12 @@
     <string name="settings_shutter_lock_short" tools:ignore="MissingTranslation">Keeps the frame rate steady in the dark</string>
     <!-- Quick menu: subtitle under the HDR switch -->
     <string name="settings_video_hdr_short" tools:ignore="MissingTranslation">10-bit HLG when the lens supports it</string>
+    <!-- SettingsPage: video stabilization switch title -->
+    <string name="settings_video_stabilization" tools:ignore="MissingTranslation">Video stabilization</string>
+    <!-- SettingsPage: video stabilization switch summary -->
+    <string name="settings_video_stabilization_description" tools:ignore="MissingTranslation">Software EIS stabilization on top of the lens optical OIS where available; turn off to record raw unstabilized</string>
+    <!-- Quick menu: subtitle under the stabilization switch -->
+    <string name="settings_video_stabilization_short" tools:ignore="MissingTranslation">EIS on top of OIS where available</string>
     <!-- Quick menu: label of the ISO chips -->
     <string name="settings_shutter_iso" translatable="false">ISO</string>
     <!-- Quick menu: live exposure readout. %1$d = shutter denominator, %2$d = ISO -->
@@ -136,6 +142,15 @@
         <item quantity="one">%1$d second</item>
         <item quantity="other">%1$d seconds</item>
     </plurals>
+
+    <!-- SettingsPage: custom zoom-stop pills section header -->
+    <string name="settings_custom_zoom_levels" tools:ignore="MissingTranslation">Zoom-stop pills</string>
+    <!-- SettingsPage: custom zoom-stop pills section description -->
+    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Set the zoom ratio pills shown on the zoom bar (ratios relative to the 1x lens, e.g. 0.5, 1, 3, 5). Empty = automatic stops from the lens.</string>
+    <!-- SettingsPage: custom zoom-stop add field label -->
+    <string name="settings_custom_zoom_add" tools:ignore="MissingTranslation">Add zoom stop</string>
+    <!-- SettingsPage: custom zoom-stop add button -->
+    <string name="settings_custom_zoom_add_button" tools:ignore="MissingTranslation">Add</string>
 
     <!-- Audio input source settings (SettingsPage): mic source used for video recordings -->
     <!-- SettingsPage: section header for audio input source selection -->

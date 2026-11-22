@@ -47,11 +47,19 @@ private fun CameraViewModel.loadCaptureSettings() {
             CodecSupport.defaultVideoCodec
         }
     }
+    ds.getString("camera_custom_zoom_levels")?.let { raw ->
+        customZoomLevelsMutable.value = raw.split(",")
+            .mapNotNull { it.trim().toFloatOrNull() }
+            .filter { it > 0f }
+            .distinct()
+            .sorted()
+    }
     videoTuningMutable.value = VideoTuning(
         quality = ds.getString("camera_video_quality")?.takeIf { it.isNotBlank() },
         fps = ds.getString("camera_video_fps")?.toIntOrNull() ?: 0,
         bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: true,
+        stabilizationEnabled = ds.getString("camera_video_stabilization")?.toBoolean() ?: true,
     )
     shutterLockMutable.value = ShutterLock(
         enabled = ds.getString("camera_shutter_lock")?.toBoolean() ?: false,
@@ -195,6 +203,21 @@ fun CameraViewModel.setVideoBitrateMbps(mbps: Int) {
 fun CameraViewModel.setVideoHdr(enabled: Boolean) {
     videoTuningMutable.update { it.copy(hdr = enabled) }
     viewModelScope.launch { ds.setString("camera_video_hdr", enabled.toString()) }
+}
+
+fun CameraViewModel.setVideoStabilizationEnabled(enabled: Boolean) {
+    videoTuningMutable.update { it.copy(stabilizationEnabled = enabled) }
+    viewModelScope.launch { ds.setString("camera_video_stabilization", enabled.toString()) }
+}
+
+/**
+ * User-configurable zoom stops as zoom ratios relative to the 1x lens
+ * (e.g. [0.5f, 1f, 3f, 5f]). Empty = use the automatic stops. Persisted so the
+ * picker pill row matches what the user actually wants on their device.
+ */
+fun CameraViewModel.setCustomZoomLevels(levels: List<Float>) {
+    customZoomLevelsMutable.value = levels.distinct().sorted()
+    viewModelScope.launch { ds.setString("camera_custom_zoom_levels", levels.distinct().sorted().joinToString(",")) }
 }
 
 fun CameraViewModel.setShutterLock(enabled: Boolean) {

@@ -187,10 +187,10 @@ internal fun CameraViewModel.highestFpsRange(
             // For normal VIDEO/TIMELAPSE honour the Settings fps (0 = auto), still a fixed range.
             val wanted = videoTuningMutable.value.fps
             fixed.firstOrNull { it.upper == wanted }
-                ?: fixed.firstOrNull { it.upper == VIDEO_FPS_STANDARD }
                 ?: fixed.firstOrNull { it.upper == VIDEO_FPS_HIGH }
-                ?: fixed.filter { it.upper <= VIDEO_FPS_STANDARD }.maxByOrNull { it.upper }
+                ?: fixed.firstOrNull { it.upper == VIDEO_FPS_STANDARD }
                 ?: fixed.filter { it.upper <= VIDEO_FPS_HIGH }.maxByOrNull { it.upper }
+                ?: fixed.filter { it.upper <= VIDEO_FPS_STANDARD }.maxByOrNull { it.upper }
                 ?: fixed.minByOrNull { kotlin.math.abs(it.upper - VIDEO_FPS_STANDARD) }
         }
     } else {
@@ -266,7 +266,8 @@ private const val VIDEO_FPS_HIGH = 60
 internal fun <T> CameraViewModel.applyVideoCaptureRequestOptions(
     builder: androidx.camera.core.ExtendableBuilder<T>,
     fpsRange: android.util.Range<Int>?,
-    stabilizationMode: Int?
+    stabilizationMode: Int?,
+    stabilizationEnabled: Boolean = true
 ) {
     try {
         val extender = androidx.camera.camera2.interop.Camera2Interop.Extender(builder)
@@ -275,7 +276,7 @@ internal fun <T> CameraViewModel.applyVideoCaptureRequestOptions(
                 android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange
             )
         }
-        if (stabilizationMode != null) {
+        if (stabilizationMode != null && stabilizationEnabled) {
             extender.setCaptureRequestOption(
                 android.hardware.camera2.CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
                 stabilizationMode

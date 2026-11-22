@@ -176,12 +176,24 @@ object LensLabels {
 
     /**
      * Drops duplicate enumerations of one physical lens: same logical camera
-     * ID twice, or identical characteristics (facing, type, 35mm-eq,
-     * nominal ratio) surfacing under two IDs. Order-preserving.
+     * ID twice, identical characteristics (facing, type, 35mm-eq, nominal
+     * ratio) surfacing under two IDs, or digital-zoom stops that share the
+     * same physical backing sensor as an already-listed lens. Order-preserving.
      */
     fun dedupe(lenses: List<PhysicalLens>): List<PhysicalLens> {
-        return lenses.distinctBy { it.logicalCameraId }
-            .distinctBy { "${it.facing}/${it.lensType}/${it.focalLengthMm35Eq}/${it.nominalZoomRatio}" }
+        val byId = lenses.distinctBy { it.logicalCameraId }
+        val byKey = byId.distinctBy {
+            "${it.facing}/${it.lensType}/${it.focalLengthMm35Eq}/${it.nominalZoomRatio}"
+        }
+        return byKey.distinctBy { lens ->
+            val backing = lens.physicalBacking
+            if (backing != null && backing.isNotEmpty()) {
+                // Digital zoom stops read the same physical sensor; keep the first entry.
+                "${lens.facing}/${lens.lensType}/${backing.sorted().joinToString(",")}"
+            } else {
+                "${lens.facing}/${lens.lensType}/${lens.focalLengthMm35Eq}/${lens.nominalZoomRatio}"
+            }
+        }
     }
 }
 

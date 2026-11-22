@@ -89,44 +89,60 @@ private fun readRawLensOrThrow(info: androidx.camera.core.CameraInfo): RawLens? 
     }
     val focal = cam2.getCameraCharacteristic(
         CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
-    )?.firstOrNull() ?: return null
+    )?.firstOrNull()
+    // Keep cameras even when the HAL doesn't report focal lengths; label math falls back
+    // to intrinsic/nominal zoom ratios.
     val sensorSize = cam2.getCameraCharacteristic(
         CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE
     )
     val eq35 = if (sensorSize != null && sensorSize.width > 0 && sensorSize.height > 0) {
         val diag = sqrt(sensorSize.width * sensorSize.width + sensorSize.height * sensorSize.height)
-        focal * FULL_FRAME_DIAGONAL_MM / diag
+        focal?.let { f -> f * FULL_FRAME_DIAGONAL_MM / diag }
     } else {
         null
     }
     val mono = cam2.getCameraCharacteristic(
         CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT
     ) == CameraMetadata.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_MONO
-    // Logical multi-camera reach: the UW stop served through the wide logical
-    // camera's zoom range (intrinsic ratio < 1), so the picker can skip a
-    // duplicate UW pill. Unknown on most HALs — the eq-35mm ratio stays primary.
+    // Logical multi-camera: digital zoom stops share the same physical backing sensor IDs
+    // as their source lens, so dedupe can collapse them into one pill instead of surfacing
+    // each stop as a separate lens (e.g. a 1x wide also exposed as 2x/5x stops).
+    val physicalBacking: Set<String>? =
+        try {
+            val field = android.hardware.camera2.CameraCharacteristics::class.java
+                .getField("LOGICAL_MULTI_CAMERA_SENSOR_IDS")
+            val key = field.get(null) as CameraCharacteristics.Key<Set<String>>
+            cam2.getCameraCharacteristic(key)
+        } catch (_: Exception) {
+            null
+        }
     val intrinsic = info.intrinsicZoomRatio.takeUnless {
         // CameraX reports 1.0f when the intrinsic ratio is unknown (the value of
         // its library-restricted INTRINSIC_ZOOM_RATIO_UNKNOWN sentinel).
         it == INTRINSIC_ZOOM_RATIO_UNKNOWN_SENTINEL
     }
     val zoomFloor = info.zoomState.value?.minZoomRatio
-    return RawLens(cam2.getCameraId(), facing, focal, eq35, mono, intrinsic, zoomFloor)
+    return RawLens(cam2.getCameraId(), facing, focal, eq35, mono, intrinsic, zoomFloor, physicalBacking)
 }
 
 private data class RawLens(
     val id: String,
     val facing: LensFacing,
-    val focalMm: Float,
+    val focalMm: Float?,
     val eq35Mm: Float?,
     val mono: Boolean,
     val intrinsicZoomRatio: Float?,
     val minZoomRatio: Float?,
+    val physicalBacking: Set<String>?,
 )
 
 /** Classifies one facing family into [PhysicalLens] entries with fallback priorities. */
 private fun buildFamily(facing: LensFacing, raws: List<RawLens>): List<PhysicalLens> {
-    val family = raws.filter { it.facing == facing }.sortedBy { it.focalMm }
+    val family = raws.filter { it.facing == facing }.sortedBy {
+        // Null focal lengths sort last so lenses with reported focal lengths
+        // stay ordered while HALs that omit it keep working via fallbacks.
+        it.focalMm ?: Float.MAX_VALUE
+    }
     if (family.isEmpty()) return emptyList()
     val nonMono = family.filterNot { it.mono }
     // Wide reference: 35mm-eq closest to ~27mm; fall back to the median focal length.
@@ -149,13 +165,20 @@ private fun buildFamily(facing: LensFacing, raws: List<RawLens>): List<PhysicalL
 /** Classifies one raw lens against the family reference into a [PhysicalLens]. */
 private fun classifyLens(raw: RawLens, reference: RawLens, facing: LensFacing): PhysicalLens {
     val type = classifyType(raw, reference, facing)
+    val refFocal = reference.focalMm
+    val nominal = if (raw.focalMm != null && refFocal != null && refFocal > 0f) {
+        raw.focalMm / refFocal
+    } else {
+        1f
+    }
     return PhysicalLens(
         logicalCameraId = raw.id,
         lensType = type,
         facing = facing,
         focalLengthMm35Eq = raw.eq35Mm,
-        nominalZoomRatio = raw.focalMm / reference.focalMm,
+        nominalZoomRatio = nominal,
         intrinsicZoomRatio = raw.intrinsicZoomRatio,
+        physicalBacking = raw.physicalBacking,
         fallbackPriority = priorityOf(type),
         labelKey = labelOf(type),
     )
@@ -165,8 +188,12 @@ private fun classifyLens(raw: RawLens, reference: RawLens, facing: LensFacing): 
 private fun classifyType(raw: RawLens, reference: RawLens, facing: LensFacing): LensType {
     if (raw.mono) return LensType.MONOCHROME
     if (raw == reference) return if (facing == LensFacing.FRONT) LensType.FRONT else LensType.WIDE
-    if (raw.focalMm < reference.focalMm * ULTRA_WIDE_RATIO) return LensType.ULTRA_WIDE
-    if (raw.focalMm > reference.focalMm * TELEPHOTO_RATIO) return LensType.TELEPHOTO
+    if (raw.focalMm != null && reference.focalMm != null) {
+        val f = raw.focalMm
+        val ref = reference.focalMm
+        if (f < ref * ULTRA_WIDE_RATIO) return LensType.ULTRA_WIDE
+        if (f > ref * TELEPHOTO_RATIO) return LensType.TELEPHOTO
+    }
     return LensType.WIDE
 }
 

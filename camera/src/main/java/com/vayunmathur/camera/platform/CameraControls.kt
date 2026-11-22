@@ -87,8 +87,27 @@ fun CameraViewModel.updateZoomLevels(minZoom: Float, maxZoom: Float) {
             "photoActive=${photoSessionActiveMutable.value} currentRatio=${zoomRatioMutable.value} " +
             "thread=${Thread.currentThread().name}"
     )
+    val custom = customZoomLevelsMutable.value
+    val levels = if (custom.isNotEmpty()) {
+        // User picked the stops: show exactly those the lens can reach, clamped to
+        // its zoom range so a too-wide/too-close stop never silently no-ops.
+        custom.filter { it in minZoom..maxZoom }
+            .map { formatZoomLabel(it) to it }
+            .ifEmpty { listOf("1x" to 1f) }
+    } else {
+        buildDefaultZoomLevels(minZoom, maxZoom)
+    }
+    Log.dev(
+        "NightPreview",
+        "updateZoomLevels() emitting levels=$levels (custom=${custom.isNotEmpty()})"
+    )
+    availableZoomLevelsMutable.value = levels
+}
+
+/** Automatic stops (used when the user has not configured their own): a UW floor when
+ *  the lens can zoom out past 1x, 1x, then tele stops that fit the max zoom. */
+internal fun buildDefaultZoomLevels(minZoom: Float, maxZoom: Float): List<Pair<String, Float>> {
     val levels = mutableListOf<Pair<String, Float>>()
-    // Wide-angle entry only when the lens can actually zoom out past 1x.
     if (minZoom < WIDE_ZOOM_ENTRY_MAX) {
         levels.add(formatZoomLabel(minZoom) to minZoom)
     }
@@ -96,12 +115,7 @@ fun CameraViewModel.updateZoomLevels(minZoom: Float, maxZoom: Float) {
     for (tele in TELE_ZOOM_LEVELS) {
         if (tele <= maxZoom + TELE_ZOOM_TOLERANCE) levels.add(formatZoomLabel(tele) to tele)
     }
-    Log.dev(
-        "NightPreview",
-        "updateZoomLevels() emitting levels=$levels – if min=1f max=1f, only [1x] will show, " +
-            "explaining 'all zoom levels also disappear'"
-    )
-    availableZoomLevelsMutable.value = levels
+    return levels
 }
 
 fun CameraViewModel.startFocusAndMetering(action: FocusMeteringAction) {

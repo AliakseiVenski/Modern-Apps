@@ -33,6 +33,7 @@ import com.vayunmathur.camera.data.setShutterLockIso
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoQuality
+import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.FALLBACK_LOCK_ISO
 import com.vayunmathur.camera.platform.refreshVideoOptions
@@ -156,6 +157,13 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                         onCheckedChange = { viewModel.setVideoHdr(it) },
                     )
                 }
+
+                ToggleCard(
+                    title = stringResource(R.string.settings_video_stabilization),
+                    subtitle = stringResource(R.string.settings_video_stabilization_short),
+                    checked = tuning.stabilizationEnabled,
+                    onCheckedChange = { viewModel.setVideoStabilizationEnabled(it) },
+                )
 
                 ToggleCard(
                     title = stringResource(R.string.settings_debug_overlay),

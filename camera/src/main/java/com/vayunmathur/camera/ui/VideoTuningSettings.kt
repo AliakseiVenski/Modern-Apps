@@ -22,6 +22,7 @@ import com.vayunmathur.camera.data.setVideoBitrateMbps
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoQuality
+import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.refreshVideoOptions
 import com.vayunmathur.library.ui.DropdownMenu
@@ -107,6 +108,14 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
                 onCheckedChange = { viewModel.setVideoHdr(it) },
             )
         }
+    }
+
+    SettingsSection(title = stringResource(R.string.settings_video_stabilization)) {
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_video_stabilization_description),
+            checked = tuning.stabilizationEnabled,
+            onCheckedChange = { viewModel.setVideoStabilizationEnabled(it) },
+        )
     }
 
     ShutterLockSettings(viewModel)

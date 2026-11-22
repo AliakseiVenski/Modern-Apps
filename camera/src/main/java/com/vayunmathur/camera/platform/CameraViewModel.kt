@@ -247,6 +247,14 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     internal val availableZoomLevelsMutable = MutableStateFlow(listOf("1x" to 1f))
     val availableZoomLevels = availableZoomLevelsMutable.asStateFlow()
 
+    /**
+     * User-configured zoom stops (ratios relative to 1x), or empty to use the
+     * automatic stops. Editable in Settings by mm focal length; drives the
+     * zoom bar so the pills match the device's real lenses.
+     */
+    internal val customZoomLevelsMutable = MutableStateFlow<List<Float>>(emptyList())
+    val customZoomLevels = customZoomLevelsMutable.asStateFlow()
+
     // Whether the front-camera preview and saved selfie are horizontally mirrored (issue #632).
     // Default true preserves the long-standing mirror-like selfie behavior.
     internal val mirrorFrontMutable = MutableStateFlow(true)
