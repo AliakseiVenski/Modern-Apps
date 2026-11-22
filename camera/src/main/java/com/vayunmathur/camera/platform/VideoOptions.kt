@@ -45,7 +45,9 @@ private const val MAX_BITRATE_MBPS = 200
 private const val UHD_BITRATE_CAP_MBPS = 100
 private const val LOWER_BITRATE_CAP_MBPS = 30
 
-internal val VIDEO_QUALITY_NAMES = listOf("UHD", "FHD", "HD", "SD")
+/** Offered video resolutions, best first. 480p is deliberately omitted: it is never useful
+ *  next to 720p on any modern sensor. */
+internal val VIDEO_QUALITY_NAMES = listOf("UHD", "FHD", "HD")
 
 /** The encoder on the target phone stalls above ~21 Mbps at 1080p, so lower resolutions stop at 30. */
 internal fun bitrateCapMbps(quality: String?): Int =

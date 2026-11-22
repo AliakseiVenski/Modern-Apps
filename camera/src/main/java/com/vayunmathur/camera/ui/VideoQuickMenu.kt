@@ -38,6 +38,7 @@ import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.FALLBACK_LOCK_ISO
 import com.vayunmathur.camera.platform.refreshVideoOptions
 import com.vayunmathur.library.ui.IconIso
+import com.vayunmathur.library.ui.IconSettings
 import com.vayunmathur.library.ui.IconTimer
 import com.vayunmathur.library.ui.Surface
 import com.vayunmathur.library.ui.Switch
@@ -163,6 +164,7 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     subtitle = stringResource(R.string.settings_video_stabilization_short),
                     checked = tuning.stabilizationEnabled,
                     onCheckedChange = { viewModel.setVideoStabilizationEnabled(it) },
+                    leading = { IconSettings(Modifier.size(22.dp), Color.White) },
                 )
 
                 ToggleCard(
