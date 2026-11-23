@@ -728,7 +728,22 @@ private class AndroidCaptureSessionHandle(
             builder.applyPreviewParams(params, targets.first())
             targets.drop(1).forEach { builder.addTarget(it) }
             builder.set(CaptureRequest.CONTROL_AF_TRIGGER, trigger)
-            session.capture(builder.build(), null, handler)
+            val tag = if (trigger == CaptureRequest.CONTROL_AF_TRIGGER_START) "START" else "CANCEL"
+            session.capture(builder.build(), object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult,
+                ) {
+                    com.vayunmathur.library.log.Log.status(
+                        "TapFocus",
+                        "$tag result afState=${result.get(CaptureResult.CONTROL_AF_STATE)} " +
+                            "afMode=${result.get(CaptureResult.CONTROL_AF_MODE)} " +
+                            "afRegions=${result.get(CaptureResult.CONTROL_AF_REGIONS)?.joinToString { it.rect.toString() }} " +
+                            "focusDist=${result.get(CaptureResult.LENS_FOCUS_DISTANCE)}",
+                    )
+                }
+            }, handler)
         }
         send(CaptureRequest.CONTROL_AF_TRIGGER_START)
         handler.postDelayed({

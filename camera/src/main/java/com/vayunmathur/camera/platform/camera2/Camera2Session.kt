@@ -280,6 +280,10 @@ class Camera2Session(
                 displayRotationDegrees = displayRotationDegrees,
                 mirrored = mirrored,
             )
+            com.vayunmathur.library.log.Log.status(
+                "TapFocus",
+                "tap lockAe=$lockAe maxAfRegions=${snapshot.maxAfRegions} maxAeRegions=${snapshot.maxAeRegions} region=$region",
+            )
             controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
             if (!lockAe) triggerAutoFocus()
