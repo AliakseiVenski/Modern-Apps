@@ -70,8 +70,6 @@ import kotlinx.coroutines.withContext
  * (`ProcessCameraProvider`) initialisation at all.
  */
 private const val ESTABLISHED_AFTER_MS = 2000L
-private const val VIDEO_BUFFER_WIDTH = 1920
-private const val VIDEO_BUFFER_HEIGHT = 1080
 
 @Composable
 internal fun Camera2Preview(
@@ -226,15 +224,6 @@ internal fun Camera2Preview(
                         liveSession.setDisplayRotationDegrees(
                             (view.display?.rotation ?: 0) * 90,
                         )
-                        if (videoPreview) {
-                            // The 16:9 video buffer fills the box centre-cropped instead of stretching.
-                            view.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
-                                fillKeepingAspect(
-                                    v as TextureView, r - l, b - t,
-                                    VIDEO_BUFFER_WIDTH to VIDEO_BUFFER_HEIGHT,
-                                )
-                            }
-                        }
                         sessionHolder.bridge.attachTo(view)
                     }
                 },
