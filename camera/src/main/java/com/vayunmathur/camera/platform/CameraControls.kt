@@ -114,7 +114,7 @@ fun CameraViewModel.tapToFocusAt(xFraction: Float, yFraction: Float, locked: Boo
         Log.status("TapToFocus", "focus requested with no live Camera2 session (locked=$locked); tap dropped")
         return false
     }
-    session.tapToFocus(xFraction, yFraction)
+    session.tapToFocus(xFraction, yFraction, lockAe = locked)
     focusLockedMutable.value = locked
     return true
 }

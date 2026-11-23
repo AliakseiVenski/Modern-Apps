@@ -22,6 +22,8 @@ data class Camera2ControlState(
     val exposureCompEv: Float = 0f,
     val afRegion: MeteringRegion? = null,
     val aeRegion: MeteringRegion? = null,
+    /** Holds the current exposure (long press); focus stays continuous. */
+    val aeLock: Boolean = false,
     /** User still-flash setting; preview ignores it, stills resolve it. */
     val flashSetting: FlashSetting = FlashSetting.OFF,
     /**
@@ -66,6 +68,8 @@ data class ResolvedRequestParams(
     val aeRegions: List<MeteringRegion>,
     /** True when a tap point is being metered (AF/AE triggered at a point). */
     val meteringActive: Boolean,
+    /** `CONTROL_AE_LOCK`: exposure frozen at its current value. */
+    val aeLock: Boolean = false,
     /** Manual exposure pair (clamped); both null keeps AE on. */
     val manualExposureTimeNs: Long? = null,
     val manualSensitivityIso: Int? = null,
@@ -129,6 +133,7 @@ object Camera2Controls {
                 emptyList()
             },
             meteringActive = state.afRegion != null || state.aeRegion != null,
+            aeLock = state.aeLock,
             manualExposureTimeNs = if (state.exposureTimeNs != null || state.sensitivityIso != null) {
                 val range = snapshot.exposureTimeRangeNs
                 if (range != null && state.exposureTimeNs != null) {

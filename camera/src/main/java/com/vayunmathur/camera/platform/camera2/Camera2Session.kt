@@ -250,8 +250,9 @@ class Camera2Session(
     }
 
     /**
-     * Tap-to-focus: transforms a normalised viewfinder tap into AF + AE
-     * metering regions (see [MeteringTransform]) and re-issues the request.
+     * Tap metering: transforms a normalised viewfinder tap into an AE metering region
+     * (see [MeteringTransform]) and re-issues the request. Focus is never touched: AF stays
+     * continuous. [lockAe] freezes the exposure after metering (long press).
      * [displayRotationDegrees] is the display rotation (0/90/180/270);
      * [mirrored] is true for a mirrored front preview.
      */
@@ -260,6 +261,7 @@ class Camera2Session(
         tapY: Float,
         displayRotationDegrees: Int = 0,
         mirrored: Boolean = false,
+        lockAe: Boolean = false,
     ) {
         executor.execute {
             val activeArray = Camera2Controls.activeArrayOf(snapshot)
@@ -274,7 +276,7 @@ class Camera2Session(
                 displayRotationDegrees = displayRotationDegrees,
                 mirrored = mirrored,
             )
-            controls = controls.copy(afRegion = region, aeRegion = region)
+            controls = controls.copy(afRegion = null, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
         }
     }
@@ -282,7 +284,7 @@ class Camera2Session(
     /** Clears tap metering, returning AF/AE to continuous full-frame. */
     fun clearMetering() {
         executor.execute {
-            controls = controls.copy(afRegion = null, aeRegion = null)
+            controls = controls.copy(afRegion = null, aeRegion = null, aeLock = false)
             issueRepeatingRequest()
         }
     }

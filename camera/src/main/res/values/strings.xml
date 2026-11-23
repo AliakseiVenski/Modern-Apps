@@ -199,7 +199,7 @@
 
     <!-- Audio and focus controls -->
     <!-- CameraScreen overlay pill: auto-exposure and auto-focus locked after long press on preview -->
-    <string name="ae_af_lock">AE/AF LOCK</string>
+    <string name="ae_af_lock">AE LOCK</string>
 
     <!-- Panorama and generic auto -->
     <!-- PanoramaOverlay: full-screen status while stitching panorama images. \u2026 is ellipsis -->

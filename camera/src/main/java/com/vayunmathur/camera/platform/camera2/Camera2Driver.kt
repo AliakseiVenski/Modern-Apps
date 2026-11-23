@@ -274,15 +274,14 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
             CaptureRequest.CONTROL_AF_REGIONS,
             params.afRegions.map { it.toMeteringRectangle() }.toTypedArray(),
         )
-        set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START)
     }
     if (params.aeRegions.isNotEmpty()) {
         set(
             CaptureRequest.CONTROL_AE_REGIONS,
             params.aeRegions.map { it.toMeteringRectangle() }.toTypedArray(),
         )
-        set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START)
     }
+    if (params.aeLock) set(CaptureRequest.CONTROL_AE_LOCK, true)
 }
 
 /** Applies resolved still controls onto a TEMPLATE_STILL_CAPTURE builder. */

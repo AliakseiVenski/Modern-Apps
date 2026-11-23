@@ -60,6 +60,9 @@ internal class Camera2PreviewSession(
     var onStreamingStarted: (() -> Unit)? = null
 
     /** Output-profile rung; advances only on pre-streaming failures. */
+    /** True when no profile was saved yet for this lens: the first open probes the ladder. */
+    val firstProbe: Boolean = !hdrPreview && !profilePrefs.contains(profileKey)
+
     @Volatile
     private var profileIndex = if (hdrPreview) 0 else savedProfile()
 

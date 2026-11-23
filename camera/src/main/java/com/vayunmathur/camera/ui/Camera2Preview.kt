@@ -120,13 +120,16 @@ internal fun Camera2Preview(
             established = true
         }
     }
-    val showInit = initDelayPassed && !established
+    var probing by remember(sessionHolder) { mutableStateOf(false) }
+    // Only while probing profiles (first open, or a profile failed): a plain re-open stays silent.
+    val showInit = initDelayPassed && !established && (sessionHolder.firstProbe || probing)
     val rebuildScope = androidx.compose.runtime.rememberCoroutineScope()
     // A configure/device failure before the first frame rebuilds the
     // session with the next, smaller output profile (the holder owns
     // the ladder); only exhausting it reports through onError.
     sessionHolder.rebuildHandler = {
         streaming = false
+        probing = true
         rebuildScope.launch {
             // The HAL unregisters the device for a moment after a
             // configure death; give it time to come back before reopening.

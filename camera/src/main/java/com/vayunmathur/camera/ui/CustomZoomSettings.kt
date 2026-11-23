@@ -1,5 +1,6 @@
 package com.vayunmathur.camera.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,7 +32,6 @@ import com.vayunmathur.camera.data.setCustomZoomLevels
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.formatZoomLabel
 import com.vayunmathur.library.ui.IconClear
-import com.vayunmathur.library.ui.InputChip
 import com.vayunmathur.library.ui.LocalContentColor
 import com.vayunmathur.library.ui.MaterialTheme
 import com.vayunmathur.library.ui.SettingsSection
@@ -66,10 +67,11 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             levels.forEach { ratio ->
-                InputChip(
+                androidx.compose.material3.InputChip(
                     selected = false,
                     onClick = { viewModel.setCustomZoomLevels(levels - ratio) },
                     label = { Text(formatZoomLabel(ratio), maxLines = 1) },
+                    shape = RoundedCornerShape(50),
                     trailingIcon = { IconClear(Modifier.size(18.dp), contentDescription = null) },
                 )
             }
@@ -85,7 +87,7 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
                         input = clean.filter { it.isDigit() || it == '.' }
                     }
                 },
-                modifier = Modifier.widthIn(min = 120.dp, max = 240.dp),
+                modifier = Modifier.widthIn(min = 140.dp, max = 240.dp),
                 singleLine = true,
                 textStyle = style,
                 cursorBrush = SolidColor(LocalContentColor.current),
@@ -95,7 +97,13 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
                     input = ""
                 }),
                 decorationBox = { inner ->
-                    Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
+                    Box(
+                        Modifier
+                            .heightIn(min = 40.dp)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         if (input.isEmpty()) {
                             Text(
                                 stringResource(R.string.settings_custom_zoom_add),
