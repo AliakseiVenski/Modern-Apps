@@ -95,6 +95,15 @@ internal class Camera2PreviewSession(
 
     private var facadeSnapshot: com.vayunmathur.camera.platform.camera2.LensCharacteristicsSnapshot? = null
 
+    /**
+     * Video viewfinder camera buffer: the encoder's 16:9, since HALs stabilize (EIS) only when the
+     * preview and video streams agree. The HDR SurfaceView path keeps the view's size.
+     */
+    private val videoBuffer: FrameSize? =
+        if (videoPreview && !hdrPreview) FrameSize(VIDEO_BUFFER_WIDTH, VIDEO_BUFFER_HEIGHT) else null
+
+    private fun previewRequest(width: Int, height: Int): FrameSize = videoBuffer ?: FrameSize(width, height)
+
     val bridge: PreviewSurfaceBridge = PreviewSurfaceBridge { event ->
         val liveSession = session
         val liveCameraId = resolvedCameraId
@@ -103,7 +112,7 @@ internal class Camera2PreviewSession(
             is PreviewSurfaceEvent.Available -> liveSession.open(
                 cameraId = liveCameraId,
                 surface = event.surface,
-                requestedSize = FrameSize(event.width, event.height),
+                requestedSize = previewRequest(event.width, event.height),
             )
             is PreviewSurfaceEvent.SizeChanged -> {
                 // No resize API on the Phase-2 session: reopen at the new
@@ -112,11 +121,15 @@ internal class Camera2PreviewSession(
                 liveSession.open(
                     cameraId = liveCameraId,
                     surface = event.surface,
-                    requestedSize = FrameSize(event.width, event.height),
+                    requestedSize = previewRequest(event.width, event.height),
                 )
             }
             is PreviewSurfaceEvent.Destroyed -> liveSession.close()
         }
+    }
+
+    init {
+        bridge.bufferSize = videoBuffer
     }
 
     private val errorGate = OnceErrorReporter(onError)
@@ -276,9 +289,7 @@ internal class Camera2PreviewSession(
             built.open(
                 cameraId = cameraId,
                 surface = liveSurface,
-                requestedSize = com.vayunmathur.camera.platform.camera2.FrameSize(
-                    bridge.state.width, bridge.state.height,
-                ),
+                requestedSize = previewRequest(bridge.state.width, bridge.state.height),
             )
         }
         return built
@@ -323,6 +334,8 @@ internal class Camera2PreviewSession(
         /** Last degrade rung (preview + JPEG only). */
         const val MAX_PROFILE_INDEX = 3
         const val RECORDER_MAX_PROFILE = 2
+        const val VIDEO_BUFFER_WIDTH = 1920
+        const val VIDEO_BUFFER_HEIGHT = 1080
         const val RETRY_DELAY_MS = 500L
         const val DEGRADE_DELAY_MS = 1000L
     }

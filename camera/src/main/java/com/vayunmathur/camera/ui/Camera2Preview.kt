@@ -224,6 +224,12 @@ internal fun Camera2Preview(
                         liveSession.setDisplayRotationDegrees(
                             (view.display?.rotation ?: 0) * 90,
                         )
+                        sessionHolder.bridge.bufferSize?.let { buffer ->
+                            // A fixed (16:9 video) buffer fills the box centre-cropped instead of stretching.
+                            view.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
+                                fillKeepingAspect(v as TextureView, r - l, b - t, buffer.width to buffer.height)
+                            }
+                        }
                         sessionHolder.bridge.attachTo(view)
                     }
                 },

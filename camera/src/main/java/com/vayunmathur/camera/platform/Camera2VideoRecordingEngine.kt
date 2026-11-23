@@ -328,14 +328,13 @@ class Camera2VideoRecordingEngine(
                             CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
                             config.stabilizationMode ?: CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
                         )
-                        set(
-                            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-                            if (config.opticalStabilization) {
-                                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
-                            } else {
-                                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_OFF
-                            },
-                        )
+                        // OIS is never forced off (see applyPreviewParams): the HAL default keeps lens OIS.
+                        if (config.opticalStabilization) {
+                            set(
+                                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON,
+                            )
+                        }
                     }
                     requestBuilder = builder
                     isoController?.let { applyExposure(builder, it.current) }

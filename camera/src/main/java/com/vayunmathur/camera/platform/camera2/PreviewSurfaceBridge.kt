@@ -50,6 +50,12 @@ class PreviewSurfaceBridge(
     private var texture: SurfaceTexture? = null
 
     /**
+     * Fixed camera buffer size for the TextureView path (null = the view's size). A TextureView resets
+     * its buffer to the view size on every layout, so this is re-applied before each event.
+     */
+    var bufferSize: FrameSize? = null
+
+    /**
      * Sets the buffer size the texture produces. Constrained high-speed
      * sessions reject any output whose size is outside the HFR list, so
      * the slo-mo holder pins the preview texture to the selection size
@@ -62,6 +68,7 @@ class PreviewSurfaceBridge(
 
     override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
         this.texture = texture
+        bufferSize?.let { texture.setDefaultBufferSize(it.width, it.height) }
         val created = Surface(texture)
         state = PreviewSurfaceState(created, width, height)
         onEvent(PreviewSurfaceEvent.Available(created, width, height))
@@ -69,6 +76,7 @@ class PreviewSurfaceBridge(
 
     override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
         val current = state.surface ?: return
+        bufferSize?.let { texture.setDefaultBufferSize(it.width, it.height) }
         state = state.copy(width = width, height = height)
         onEvent(PreviewSurfaceEvent.SizeChanged(current, width, height))
     }

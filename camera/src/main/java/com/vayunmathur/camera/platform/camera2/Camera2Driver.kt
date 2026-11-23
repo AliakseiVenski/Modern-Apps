@@ -283,14 +283,11 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
             CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
             params.videoStabilizationMode ?: CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
         )
-        set(
-            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-            if (params.opticalStabilization) {
-                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
-            } else {
-                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_OFF
-            },
-        )
+        // OIS is never forced off: a logical multi-camera may not list OIS though its lenses have it,
+        // and an explicit OFF then disables the hardware OIS the HAL runs by default.
+        if (params.opticalStabilization) {
+            set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON)
+        }
     }
     if (params.afRegions.isNotEmpty()) {
         set(
