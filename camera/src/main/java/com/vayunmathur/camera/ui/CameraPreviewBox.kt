@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,7 +84,10 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
     // The still-crop ratios in state are portrait (3:4, 9:16, ...). In a landscape
     // window the sensor frame rotates with the device, so use the reciprocal —
     // otherwise a portrait box in a wide window collapses to a narrow strip (#827).
-    val previewRatio = previewRatioForWindow(state.previewAspectRatio, maxWidth.value, maxHeight.value)
+    // The video modes box the frame that records (16:9 or 4:3), not the photo crop.
+    val videoAspect by viewModel.effectiveVideoAspect.collectAsState()
+    val baseRatio = if (state.isVideoType) videoAspect.portraitRatio else state.previewAspectRatio
+    val previewRatio = previewRatioForWindow(baseRatio, maxWidth.value, maxHeight.value)
     val boxAspect = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else 1f
     val previewSize = if (previewRatio > boxAspect) {
         Modifier.fillMaxWidth().aspectRatio(previewRatio)

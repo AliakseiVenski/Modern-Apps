@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vayunmathur.camera.R
 import com.vayunmathur.camera.data.setDebugOverlay
+import com.vayunmathur.camera.data.setVideoAspect
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoIsoLimit
@@ -82,6 +83,15 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
+
+                if (opts != null && opts.aspects.size > 1) {
+                    PillRow(
+                        title = stringResource(R.string.settings_video_aspect),
+                        choices = opts.aspects.map { it to it.label },
+                        selected = tuning.aspect,
+                        onSelect = { viewModel.setVideoAspect(it) },
+                    )
+                }
 
                 if (opts != null && opts.qualities.isNotEmpty()) {
                     val labels = videoQualityLabels()

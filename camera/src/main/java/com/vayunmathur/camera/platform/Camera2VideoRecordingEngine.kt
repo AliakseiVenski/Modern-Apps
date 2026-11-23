@@ -275,8 +275,10 @@ class Camera2VideoRecordingEngine(
                 // Preview never needs encoder resolution: cap at 1080p so
                 // the (encoder + preview + analysis) stream combination
                 // stays within guaranteed HAL limits at UHD tiers.
-                val width = minOf(config.width, PREVIEW_MAX_WIDTH)
-                val height = minOf(config.height, PREVIEW_MAX_HEIGHT)
+                // Scaled down as a whole so the preview keeps the recording's shape (4:3 stays 4:3).
+                val scale = minOf(1f, PREVIEW_MAX_WIDTH.toFloat() / config.width, PREVIEW_MAX_HEIGHT.toFloat() / config.height)
+                val width = (config.width * scale).toInt()
+                val height = (config.height * scale).toInt()
                 setDefaultBufferSize(width, height)
                 ownedPreviewBufferSize = width to height
             }

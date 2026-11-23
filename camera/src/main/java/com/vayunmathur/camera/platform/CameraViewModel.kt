@@ -261,6 +261,10 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
 
     /** Video fps and stabilization choices, read when a recording starts. */
     internal val videoTuningMutable = MutableStateFlow(VideoTuning())
+
+    /** Frame shape the viewfinder box takes in the video modes: the plan's, so it is what records. */
+    internal val effectiveVideoAspectMutable = MutableStateFlow(com.vayunmathur.camera.domain.VideoAspect.WIDE)
+    val effectiveVideoAspect = effectiveVideoAspectMutable.asStateFlow()
     val videoTuning = videoTuningMutable.asStateFlow()
 
     /** What the lens a recording would use reports it can do; filled by [refreshVideoOptions]. */

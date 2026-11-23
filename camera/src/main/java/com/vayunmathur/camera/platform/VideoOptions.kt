@@ -4,6 +4,7 @@ import android.graphics.ImageFormat
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.util.Size
+import com.vayunmathur.camera.domain.VideoAspect
 import com.vayunmathur.camera.domain.VideoFpsPolicy
 import com.vayunmathur.camera.domain.VideoStabilizationPolicy
 import com.vayunmathur.camera.platform.camera2.CharacteristicsFacade
@@ -20,7 +21,8 @@ import kotlinx.coroutines.withContext
  * [com.vayunmathur.camera.domain.VideoQualityTier] name (null = best that works);
  * [stabilizationEnabled] asks for EIS on top of OIS where available; [hdr] records 10-bit HLG;
  * [isoLimit] caps the ISO the camera may use (0 = no cap); [bitrateMbps] pins the encoder bitrate
- * (0 = automatic, which adapts to motion, storage and heat).
+ * (0 = automatic, which adapts to motion, storage and heat); [aspect] is the frame shape (the resolutions
+ * on offer follow it).
  */
 data class VideoTuning(
     val fps: Int = 0,
@@ -29,13 +31,17 @@ data class VideoTuning(
     val hdr: Boolean = false,
     val isoLimit: Int = 0,
     val bitrateMbps: Int = 0,
+    val aspect: VideoAspect = VideoAspect.WIDE,
 )
 
 /** What the selected lens reports it can record. */
 data class VideoOptions(
     val fps: List<Int>,
     val stabilizationSupported: Boolean,
+    /** Resolutions on offer for the chosen aspect. */
     val qualities: List<String>,
+    /** Frame shapes the lens can record at least one resolution of. */
+    val aspects: List<VideoAspect>,
     val hdrSupported: Boolean,
     val isoStops: List<Int>,
     /** What the encoder for the chosen codec accepts, in Mbps (null = unknown, no slider). */
@@ -57,7 +63,7 @@ private const val LOWER_BITRATE_CAP_MBPS = 30
 
 /** The target phone's encoder stalls above ~21 Mbps at 1080p, so lower resolutions stop at 30 and UHD at 100. */
 internal fun bitrateCapMbps(tierName: String?): Int =
-    if (tierName == "UHD") UHD_BITRATE_CAP_MBPS else LOWER_BITRATE_CAP_MBPS
+    if (tierName == "UHD" || tierName == "UHD43") UHD_BITRATE_CAP_MBPS else LOWER_BITRATE_CAP_MBPS
 
 /** The user's pinned bitrate for [tier] in bits per second, clamped to that resolution's cap; null = automatic. */
 internal fun CameraViewModel.customBitrateBps(tier: com.vayunmathur.camera.domain.VideoQualityTier): Int? {
@@ -79,12 +85,19 @@ private fun encoderBitrateRangeMbps(mime: String): IntRange? = try {
     null
 }
 
-/** Resolutions offered in the picker, best first (480p is never useful next to 720p). */
-internal val OFFERED_TIERS = listOf(
-    com.vayunmathur.camera.domain.VideoQualityTier.UHD,
-    com.vayunmathur.camera.domain.VideoQualityTier.FHD,
-    com.vayunmathur.camera.domain.VideoQualityTier.HD,
-)
+/** Resolutions offered in the picker for [aspect], best first (480p is never useful next to 720p). */
+internal fun offeredTiers(aspect: VideoAspect): List<com.vayunmathur.camera.domain.VideoQualityTier> = when (aspect) {
+    VideoAspect.WIDE -> listOf(
+        com.vayunmathur.camera.domain.VideoQualityTier.UHD,
+        com.vayunmathur.camera.domain.VideoQualityTier.FHD,
+        com.vayunmathur.camera.domain.VideoQualityTier.HD,
+    )
+    VideoAspect.STANDARD -> listOf(
+        com.vayunmathur.camera.domain.VideoQualityTier.UHD43,
+        com.vayunmathur.camera.domain.VideoQualityTier.QHD43,
+        com.vayunmathur.camera.domain.VideoQualityTier.FHD43,
+    )
+}
 
 private const val NANOS_PER_SECOND = 1_000_000_000L
 
@@ -117,6 +130,10 @@ suspend fun CameraViewModel.refreshVideoOptions() {
     videoOptionsMutable.value = withContext(Dispatchers.Default) {
         val (cameraId, snapshot) = recordingCameraSnapshot() ?: return@withContext null
         val mime = videoMime(bindTimeSettings.value.videoCodec).first
+        val aspect = videoTuningMutable.value.aspect
+        val aspects = VideoAspect.entries.filter { candidate ->
+            offeredTiers(candidate).any { tierFits(cameraId, snapshot, mime, it, VideoFpsPolicy.STANDARD) }
+        }
         VideoOptions(
             fps = VideoFpsPolicy.fixedRates(snapshot.aeTargetFpsRanges.map { it.lower to it.upper }),
             stabilizationSupported = VideoStabilizationPolicy.choose(
@@ -125,9 +142,10 @@ suspend fun CameraViewModel.refreshVideoOptions() {
                 opticalModes = snapshot.opticalStabilizationModes,
                 sdkInt = Build.VERSION.SDK_INT,
             ).any,
-            qualities = OFFERED_TIERS
+            qualities = offeredTiers(aspect)
                 .filter { tierFits(cameraId, snapshot, mime, it, VideoFpsPolicy.STANDARD) }
                 .map { it.name },
+            aspects = aspects,
             hdrSupported = hdrSupported(cameraId),
             isoStops = isoLimitStops(snapshot),
             encoderBitrateMbps = encoderBitrateRangeMbps(mime),
@@ -188,7 +206,9 @@ internal fun CameraViewModel.tierFits(
     fps: Int,
 ): Boolean {
     val privateSizes = snapshot?.streamConfig?.sizesFor(ImageFormat.PRIVATE).orEmpty()
-    return (privateSizes.isEmpty() || privateSizes.any { it.width == tier.width && it.height == tier.height }) &&
+    // A lens that lists no sizes is trusted for 16:9 only: a 4:3 rung must be advertised.
+    val listed = privateSizes.any { it.width == tier.width && it.height == tier.height }
+    return (listed || (privateSizes.isEmpty() && tier.aspect == VideoAspect.WIDE)) &&
         (cameraId == null || maxStreamFps(cameraId, Size(tier.width, tier.height)) >= fps) &&
         CodecSupport.supportsVideoBitrate(mime, tier.width, tier.height, fps, tier.bitrateFor(fps))
 }
@@ -205,7 +225,10 @@ internal data class VideoPlan(
     val hdr: Boolean,
     /** ISO the camera may not exceed; 0 = no cap. */
     val isoLimit: Int,
-)
+) {
+    /** The frame shape this plan records (the 4:3 choice falls back to 16:9 on a lens without 4:3 sizes). */
+    val aspect: VideoAspect get() = tier.aspect
+}
 
 /**
  * Codec from the bind-time settings (HEVC when HDR is on), then resolution and rate. A chosen
@@ -228,21 +251,27 @@ internal fun CameraViewModel.planVideo(
     }
     val fixedRates = VideoFpsPolicy.fixedRates(snapshot?.aeTargetFpsRanges.orEmpty().map { it.lower to it.upper })
     val rates = VideoFpsPolicy.candidates(fixedRates, tuning.fps, cinematic = mode == CameraMode.CINEMATIC)
-    val chosenTiers = tuning.quality?.let { name -> OFFERED_TIERS.dropWhile { it.name != name } }
-    val choice = if (chosenTiers != null) {
+    // The chosen shape, unless the lens has no 4:3 size at all: then 16:9.
+    val aspect = tuning.aspect.takeIf { wanted ->
+        wanted == VideoAspect.WIDE ||
+            offeredTiers(wanted).any { tier -> rates.any { tierFits(cameraId, snapshot, mime, tier, it) } }
+    } ?: VideoAspect.WIDE
+    val aspectTiers = offeredTiers(aspect)
+    val chosenTiers = tuning.quality?.let { name -> aspectTiers.dropWhile { it.name != name } }
+    val choice = if (!chosenTiers.isNullOrEmpty()) {
         chosenTiers.firstNotNullOfOrNull { tier ->
             rates.firstOrNull { tierFits(cameraId, snapshot, mime, tier, it) }?.let { it to tier }
         }
     } else {
         rates.firstNotNullOfOrNull { rate ->
-            com.vayunmathur.camera.domain.VideoQualityTier.entries
+            (aspectTiers + if (aspect == VideoAspect.WIDE) listOf(com.vayunmathur.camera.domain.VideoQualityTier.SD) else emptyList())
                 .firstOrNull { tierFits(cameraId, snapshot, mime, it, rate) }?.let { rate to it }
         }
     }
     val maxIso = snapshot?.maxEffectiveIso() ?: 0
     return VideoPlan(
         fps = choice?.first ?: VideoFpsPolicy.STANDARD,
-        tier = choice?.second ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD,
+        tier = choice?.second ?: aspectTiers.getOrElse(1) { aspectTiers.last() },
         mime = mime,
         useAv1 = useAv1,
         useHevc = useHevc,

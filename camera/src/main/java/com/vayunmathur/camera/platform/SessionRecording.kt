@@ -41,7 +41,9 @@ internal class SessionRecorderBinding(private val viewModel: CameraViewModel, va
 /** The plan a recording in [mode] would use on the selected lens; null when no lens snapshot exists. */
 internal fun CameraViewModel.recorderPlan(mode: CameraMode): RecorderPlan? {
     val (cameraId, snapshot) = recordingCameraSnapshot() ?: return null
-    return planVideo(mode, cameraId, snapshot).toRecorderPlan()
+    val plan = planVideo(mode, cameraId, snapshot).toRecorderPlan()
+    effectiveVideoAspectMutable.value = plan.tier.aspect
+    return plan
 }
 
 /** Prepares (or reuses) the encoder for [plan] and returns its input surface; null when a take owns it. */

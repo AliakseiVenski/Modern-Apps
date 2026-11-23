@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import com.vayunmathur.camera.platform.FlashMode
 import com.vayunmathur.camera.platform.TimerDuration
 import com.vayunmathur.camera.platform.capturePhotoForResult
 import com.vayunmathur.camera.data.cycleAspectRatio
+import com.vayunmathur.camera.data.cycleVideoAspect
 import com.vayunmathur.camera.data.setFlashMode
 import com.vayunmathur.camera.platform.setQrResult
 import com.vayunmathur.camera.data.setTimerDuration
@@ -106,6 +108,12 @@ fun CameraScreen(
     // top app bar or title, so AppScaffold would inject an unwanted bar, and TopAppBarOverlay
     // provides neither the black container surface nor the system-inset padding the preview
     // relies on. The bare Scaffold(containerColor) is the correct primitive here.
+    val videoAspect by viewModel.effectiveVideoAspect.collectAsState()
+    val videoOptions by viewModel.videoOptions.collectAsState()
+    // The pill needs a lens with more than one shape, and the shape cannot change under a running take.
+    val videoAspectLabel = videoAspect.label.takeIf {
+        state.isVideoType && !state.isRecording && (videoOptions?.aspects?.size ?: 0) > 1
+    }
     Scaffold(
         containerColor = Color.Black
     ) { padding ->
@@ -145,6 +153,8 @@ fun CameraScreen(
                     onGridToggle = { viewModel.toggleGrid() },
                     onLevelToggle = { viewModel.toggleLevel() },
                     onAspectCycle = { viewModel.cycleAspectRatio() },
+                    videoAspectLabel = videoAspectLabel,
+                    onVideoAspectCycle = { viewModel.cycleVideoAspect() },
                     onMicToggle = { viewModel.toggleMicMuted() },
                     onTimerCycle = {
                         val next = when (state.timerDuration) {

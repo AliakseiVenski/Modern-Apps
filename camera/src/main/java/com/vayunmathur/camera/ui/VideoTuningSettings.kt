@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.R
+import com.vayunmathur.camera.data.setVideoAspect
 import com.vayunmathur.camera.data.setVideoBitrateMbps
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
@@ -49,6 +50,16 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
     LaunchedEffect(Unit) { viewModel.refreshVideoOptions() }
     val opts = options ?: return
     val auto = stringResource(R.string.settings_video_auto)
+
+    if (opts.aspects.size > 1) {
+        SettingsSection(title = stringResource(R.string.settings_video_aspect)) {
+            ChoiceDropdown(
+                choices = opts.aspects.map { it to it.label },
+                selected = tuning.aspect,
+                onSelect = { viewModel.setVideoAspect(it) },
+            )
+        }
+    }
 
     if (opts.qualities.isNotEmpty()) {
         val labels = videoQualityLabels()
@@ -145,6 +156,9 @@ internal fun videoQualityLabels(): Map<String, String> = mapOf(
     "UHD" to stringResource(R.string.video_quality_uhd),
     "FHD" to stringResource(R.string.video_quality_fhd),
     "HD" to stringResource(R.string.video_quality_hd),
+    "UHD43" to stringResource(R.string.video_quality_uhd43),
+    "QHD43" to stringResource(R.string.video_quality_qhd43),
+    "FHD43" to stringResource(R.string.video_quality_fhd43),
 )
 
 /** Outlined-button dropdown over (value, label) pairs. */
