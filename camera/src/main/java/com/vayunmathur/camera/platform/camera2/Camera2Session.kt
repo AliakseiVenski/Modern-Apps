@@ -711,7 +711,13 @@ class Camera2Session(
         android.os.Handler(executor.looper).postDelayed({
             if (generation != afTapGeneration) return@postDelayed
             triggerAutoFocus(android.hardware.camera2.CaptureRequest.CONTROL_AF_TRIGGER_CANCEL)
-            controls = controls.copy(afAuto = false)
+            // The tapped window must go too: left in place, AE keeps metering that small patch and
+            // brightness jumps as the scene moves under it. A held exposure keeps its region.
+            controls = controls.copy(
+                afAuto = false,
+                afRegion = null,
+                aeRegion = if (controls.aeLock) controls.aeRegion else null,
+            )
             issueRepeatingRequest()
         }, AF_HOLD_MS)
     }
