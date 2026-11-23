@@ -5,6 +5,7 @@ import com.vayunmathur.camera.domain.ExposureSetting
 import com.vayunmathur.camera.domain.LumaPlaneMath
 import com.vayunmathur.camera.domain.PlaneView
 import com.vayunmathur.camera.domain.ShutterPriorityController
+import com.vayunmathur.camera.platform.camera2.Camera2Controls
 import com.vayunmathur.camera.platform.camera2.Camera2Session
 import com.vayunmathur.camera.platform.camera2.aeLocked
 import com.vayunmathur.camera.platform.camera2.setIsoCap
@@ -47,7 +48,8 @@ internal class PreviewIsoCap {
         val now = SystemClock.elapsedRealtime()
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return
-        val luma = LumaPlaneMath.grid(plane)?.first?.average() ?: return
+        // A tapped point meters its own window (as the HAL's AE does), else the whole frame.
+        val luma = tappedLuma(plane, session) ?: LumaPlaneMath.grid(plane)?.first?.average() ?: return
         lastMs = now
         val frameNanos = NANOS_PER_SECOND / cap.fps
         val active = controller ?: ShutterPriorityController(
@@ -69,7 +71,35 @@ internal class PreviewIsoCap {
         status.value = "ISO cap ${cap.isoLimit}: ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
     }
 
+    /** Mean luma of the tapped AE window on the analysis plane, or null when no point is metered. */
+    private fun tappedLuma(plane: PlaneView, session: Camera2Session): Double? {
+        val state = session.controlState
+        val region = state.aeRegion?.rect ?: return null
+        val crop = Camera2Controls.currentCropRegion(state, session.characteristics)
+        if (crop.width <= 0 || crop.height <= 0 || plane.width <= 0 || plane.height <= 0) return null
+        fun scaled(value: Int, origin: Int, span: Int, size: Int) =
+            (((value - origin).toFloat() / span) * size).toInt().coerceIn(0, size - 1)
+        val x0 = scaled(region.left, crop.left, crop.width, plane.width)
+        val x1 = scaled(region.right, crop.left, crop.width, plane.width)
+        val y0 = scaled(region.top, crop.top, crop.height, plane.height)
+        val y1 = scaled(region.bottom, crop.top, crop.height, plane.height)
+        var sum = 0L
+        var count = 0
+        var y = y0
+        while (y <= y1) {
+            var x = x0
+            while (x <= x1) {
+                sum += plane.buffer.get(plane.offsetOf(x, y)).toInt() and 0xFF
+                count++
+                x += WINDOW_STEP
+            }
+            y += WINDOW_STEP
+        }
+        return if (count == 0) null else sum.toDouble() / count
+    }
+
     private companion object {
+        const val WINDOW_STEP = 4
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val INTERVAL_MS = 50L
         const val MAX_GAP_MS = 200L

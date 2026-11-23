@@ -46,7 +46,7 @@ internal fun Camera2RecordingPreview(
     )
 }
 
-private fun fillKeepingAspect(view: TextureView, width: Int, height: Int, buffer: Pair<Int, Int>) {
+internal fun fillKeepingAspect(view: TextureView, width: Int, height: Int, buffer: Pair<Int, Int>) {
     if (width <= 0 || height <= 0) return
     val (visibleW, visibleH) = if (height >= width) buffer.second to buffer.first else buffer
     val bufferAspect = visibleW.toFloat() / visibleH
