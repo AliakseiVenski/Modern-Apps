@@ -282,7 +282,9 @@ class Camera2Session(
             )
             com.vayunmathur.library.log.Log.status(
                 "TapFocus",
-                "tap lockAe=$lockAe maxAfRegions=${snapshot.maxAfRegions} maxAeRegions=${snapshot.maxAeRegions} region=$region",
+                "tap x=$tapX y=$tapY lockAe=$lockAe zoom=${controls.zoomRatio} zoomRange=${snapshot.minZoomRatio}..${snapshot.maxZoomRatio} " +
+                    "activeArray=$activeArray crop=$crop sensorOrientation=${snapshot.sensorOrientationDegrees} " +
+                    "displayRotation=$displayRotationDegrees maxAf=${snapshot.maxAfRegions} region=$region",
             )
             controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
