@@ -226,7 +226,9 @@ internal fun CameraViewModel.startRecording() {
     val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision, fixed = pinnedBps != null)
     val recorderPlan = plan.toRecorderPlan()
     val liveSession = activeCamera2Session
-    if (liveSession != null && sessionRecordingReady(recorderPlan)) {
+    val blocker = sessionRecordingBlocker(recorderPlan)
+    Log.status("Recording", if (blocker == null) "take on the viewfinder session" else "engine fallback: $blocker")
+    if (liveSession != null && blocker == null) {
         startOnViewfinderSession(
             liveSession, recorderPlan, config, controller, cacheFile, displayName, recordingMode, timestamp,
         )
@@ -520,20 +522,24 @@ private fun CameraViewModel.startOnViewfinderSession(
     camera2RecordingState.displayName = displayName
     camera2RecordingState.mode = recordingMode
     camera2RecordingState.timestamp = timestamp
-    try {
-        recorder.start(VideoRecordingRequest(cacheFile, audioEnabled = audioForMode)) { outcome ->
-            onCamera2RecordingFinalized(outcome)
+    // Shown as recording at once; the codec, muxer and mic start off the main thread so the
+    // viewfinder never stalls on them (a late stop waits for the start, see SessionVideoRecorder).
+    startRecordingTimer()
+    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        try {
+            recorder.start(VideoRecordingRequest(cacheFile, audioEnabled = audioForMode)) { outcome ->
+                onCamera2RecordingFinalized(outcome)
+            }
+        } catch (e: Exception) {
+            Log.error("SessionRecorder", "Recording on the viewfinder session failed to start", e)
+            camera2RecordingState.sessionRecorder = null
+            stopRecordingTimer()
+            debug.reset()
+            cacheFile.delete()
+            com.vayunmathur.library.util.AppMessages.show(
+                app.getString(com.vayunmathur.camera.R.string.camera_recording_failed)
+            )
+            rearmSessionRecorder()
         }
-        isRecordingMutable.value = true
-        startRecordingTimer()
-    } catch (e: Exception) {
-        Log.error("SessionRecorder", "Recording on the viewfinder session failed to start", e)
-        camera2RecordingState.sessionRecorder = null
-        debug.reset()
-        cacheFile.delete()
-        com.vayunmathur.library.util.AppMessages.show(
-            app.getString(com.vayunmathur.camera.R.string.camera_recording_failed)
-        )
-        rearmSessionRecorder()
     }
 }

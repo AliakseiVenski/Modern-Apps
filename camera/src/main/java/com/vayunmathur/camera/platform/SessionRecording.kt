@@ -96,11 +96,20 @@ internal fun CameraViewModel.releasePreparedRecorder() {
  * Whether the live viewfinder session can record [plan] on its own: it was configured with an encoder
  * surface, and that encoder is the one prepared for this plan.
  */
-internal fun CameraViewModel.sessionRecordingReady(plan: RecorderPlan): Boolean {
-    val session = activeCamera2Session ?: return false
-    val prepared = camera2RecordingState.prepared ?: return false
-    val surface = session.readyRecorderSurface ?: return false
-    return surface === prepared.core.preparedEncoderSurface() && !prepared.taken && prepared.plan == plan
+internal fun CameraViewModel.sessionRecordingReady(plan: RecorderPlan): Boolean =
+    sessionRecordingBlocker(plan) == null
+
+/** Why a take cannot start on the viewfinder session (it then falls back to reopening the camera), or null. */
+internal fun CameraViewModel.sessionRecordingBlocker(plan: RecorderPlan): String? {
+    val session = activeCamera2Session ?: return "no live session"
+    val prepared = camera2RecordingState.prepared ?: return "no prepared encoder"
+    val surface = session.readyRecorderSurface ?: return "session has no configured encoder surface"
+    return when {
+        surface !== prepared.core.preparedEncoderSurface() -> "session surface is not the prepared encoder's"
+        prepared.taken -> "encoder already taken"
+        prepared.plan != plan -> "plan changed: prepared ${prepared.plan} now $plan"
+        else -> null
+    }
 }
 
 /** Re-arms the viewfinder session with a fresh encoder after a take (a MediaCodec encodes one file). */

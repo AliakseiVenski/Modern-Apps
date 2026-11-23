@@ -24,12 +24,16 @@ internal class SessionVideoRecorder(
     private var outputFile: File? = null
     private var outcomeCallback: ((VideoRecordingOutcome) -> Unit)? = null
 
+    // Start and stop exclude each other: a stop pressed while the (off-main) start runs waits for it.
+    @Synchronized
     override fun start(request: VideoRecordingRequest, onFinalized: (VideoRecordingOutcome) -> Unit) {
         check(!running) { "SessionVideoRecorder already running" }
         outputFile = request.outputFile
         outcomeCallback = onFinalized
+        val begin = android.os.SystemClock.elapsedRealtime()
         try {
             core.setupMuxerAndAudio(request.outputFile)
+            val afterSetup = android.os.SystemClock.elapsedRealtime()
             core.startVideoCodec()
             // The prepared codec was configured with the bitrate known at prepare time; apply today's.
             runCatching { core.setVideoBitrate(controller.currentBitrateBps) }
@@ -37,8 +41,13 @@ internal class SessionVideoRecorder(
             running = true
             core.startDrain()
             core.startAudio()
+            val beforeTarget = android.os.SystemClock.elapsedRealtime()
             session.startRecordingTarget()
             startAdaptationThread()
+            Log.status(
+                "SessionRecorder",
+                "take start: setup ${afterSetup - begin} ms, codec+audio ${beforeTarget - afterSetup} ms",
+            )
         } catch (e: Exception) {
             running = false
             core.release()
@@ -46,6 +55,7 @@ internal class SessionVideoRecorder(
         }
     }
 
+    @Synchronized
     override fun stop() {
         if (!running) return
         running = false
