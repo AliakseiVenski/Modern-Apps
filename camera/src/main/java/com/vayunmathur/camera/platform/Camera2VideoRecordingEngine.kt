@@ -460,7 +460,9 @@ class Camera2VideoRecordingEngine(
                 sink(
                     timestamp,
                     result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME),
-                    result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY),
+                    result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY)?.let {
+                        it * (result.get(android.hardware.camera2.CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100) / 100
+                    },
                     result.get(android.hardware.camera2.CaptureResult.LENS_FOCAL_LENGTH),
                 )
             }

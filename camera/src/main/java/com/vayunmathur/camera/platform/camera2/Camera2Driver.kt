@@ -346,7 +346,7 @@ internal fun CaptureRequest.Builder.applyHighSpeedParams(
 internal fun TotalCaptureResult.toRawStillMetadata(): RawStillMetadata = RawStillMetadata(
     sensorTimestampNs = get(CaptureResult.SENSOR_TIMESTAMP),
     exposureTimeNs = get(CaptureResult.SENSOR_EXPOSURE_TIME),
-    iso = get(CaptureResult.SENSOR_SENSITIVITY),
+    iso = get(CaptureResult.SENSOR_SENSITIVITY)?.let { it * (get(CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100) / 100 },
     focalLengthMm = get(CaptureResult.LENS_FOCAL_LENGTH),
     frameNumber = frameNumber,
     aeState = get(CaptureResult.CONTROL_AE_STATE),

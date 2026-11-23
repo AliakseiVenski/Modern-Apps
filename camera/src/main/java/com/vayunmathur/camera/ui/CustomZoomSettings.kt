@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,13 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.R
 import com.vayunmathur.camera.data.setCustomZoomLevels
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.formatZoomLabel
-import com.vayunmathur.library.ui.IconAdd
 import com.vayunmathur.library.ui.IconDelete
 import com.vayunmathur.library.ui.LabeledTextField
 import com.vayunmathur.library.ui.MaterialTheme
@@ -37,6 +37,10 @@ import com.vayunmathur.library.ui.Text
 internal fun CustomZoomSettings(viewModel: CameraViewModel) {
     val levels by viewModel.customZoomLevels.collectAsState()
     var addField by remember { mutableStateOf("") }
+    fun commit(text: String) {
+        val added = text.split(Regex("[\\s;]+")).mapNotNull { it.replace(',', '.').toFloatOrNull()?.takeIf { r -> r > 0f } }
+        if (added.isNotEmpty()) viewModel.setCustomZoomLevels(levels + added)
+    }
 
     SettingsSection(title = stringResource(R.string.settings_custom_zoom_levels)) {
         Text(
@@ -60,22 +64,20 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
             }
             LabeledTextField(
                 value = addField,
-                onValueChange = { addField = it },
+                onValueChange = { text ->
+                    if (text.any { it.isWhitespace() }) {
+                        commit(text)
+                        addField = ""
+                    } else {
+                        addField = text
+                    }
+                },
                 label = stringResource(R.string.settings_custom_zoom_add),
-                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done,
+                keyboardActions = KeyboardActions(onDone = { commit(addField); addField = "" }),
                 placeholder = "3",
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             )
         }
-        SettingsRow(
-            title = stringResource(R.string.settings_custom_zoom_add_button),
-            onClick = {
-                addField.trim().toFloatOrNull()?.takeIf { it > 0f }?.let { ratio ->
-                    viewModel.setCustomZoomLevels(levels + ratio)
-                    addField = ""
-                }
-            },
-            trailingContent = { IconAdd(Modifier.size(20.dp)) },
-        )
     }
 }

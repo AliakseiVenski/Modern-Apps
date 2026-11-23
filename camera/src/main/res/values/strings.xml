@@ -124,7 +124,7 @@
 
     <!-- SettingsPage: user-configurable zoom stops -->
     <string name="settings_custom_zoom_levels" tools:ignore="MissingTranslation">Zoom stops</string>
-    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Zoom ratios shown as pills, relative to the 1x lens (for example 0.5, 1, 3, 5). Leave empty for automatic stops; stops the lens cannot reach are hidden.</string>
+    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Zoom ratios shown as pills, relative to the 1x lens (for example 0.5, 1, 3, 5). Type a ratio and press space or Enter to save it. Leave empty for automatic stops; stops the lens cannot reach are hidden.</string>
     <string name="settings_custom_zoom_add" tools:ignore="MissingTranslation">Zoom ratio</string>
     <string name="settings_custom_zoom_add_button" tools:ignore="MissingTranslation">Add zoom stop</string>
 
@@ -210,7 +210,7 @@
     <string name="night_2">Night %1$s%%</string>
 
     <!-- CameraPreviewBox: session bind failed after retries, shown over the black preview -->
-    <string name="camera_init_message" tools:ignore="MissingTranslation">Setting up the camera. The first launch can take a few seconds.</string>
+    <string name="camera_init_message" tools:ignore="MissingTranslation">Starting the camera. The first launch can take a few seconds.</string>
     <string name="camera_bind_failed_title">Camera couldn\'t start</string>
     <!-- CameraPreviewBox: bind-failure detail under the title, above the Retry button -->
     <string name="camera_bind_failed_message">Try again, or switch lens or mode.</string>
