@@ -69,6 +69,8 @@ import kotlinx.coroutines.withContext
  * during composition on main, and nothing here waits on CameraX
  * (`ProcessCameraProvider`) initialisation at all.
  */
+private const val ESTABLISHED_AFTER_MS = 2000L
+
 @Composable
 internal fun Camera2Preview(
     cameraId: String,
@@ -109,19 +111,28 @@ internal fun Camera2Preview(
         kotlinx.coroutines.delay(300)
         initDelayPassed = true
     }
-    val showInit = initDelayPassed && !streaming
+    // The viewfinder counts as established once frames have flowed for a while; a profile that streams
+    // briefly and then dies resets [streaming] before that, so the label stays through every attempt.
+    var established by remember(sessionHolder) { mutableStateOf(false) }
+    LaunchedEffect(streaming) {
+        if (streaming) {
+            kotlinx.coroutines.delay(ESTABLISHED_AFTER_MS)
+            established = true
+        }
+    }
+    val showInit = initDelayPassed && !established
     val rebuildScope = androidx.compose.runtime.rememberCoroutineScope()
     // A configure/device failure before the first frame rebuilds the
     // session with the next, smaller output profile (the holder owns
     // the ladder); only exhausting it reports through onError.
     sessionHolder.rebuildHandler = {
+        streaming = false
         rebuildScope.launch {
             // The HAL unregisters the device for a moment after a
             // configure death; give it time to come back before reopening.
             // A first failure retries the same profile quickly (cold HAL).
             kotlinx.coroutines.delay(sessionHolder.nextRebuildDelayMs)
             if (sessionHolder.isClosedForRebuild()) return@launch
-            streaming = false
             val rebuilt = sessionHolder.rebuildNext()
             session = rebuilt
             if (rebuilt != null) onSessionChanged(rebuilt)

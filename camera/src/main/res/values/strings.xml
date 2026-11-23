@@ -110,7 +110,7 @@
     <!-- ISO limit picker -->
     <string name="settings_video_iso_limit" tools:ignore="MissingTranslation">ISO limit</string>
     <string name="settings_video_iso_limit_description" tools:ignore="MissingTranslation">Highest ISO the camera may use while filming. Lower keeps noise down but makes dark scenes darker; the shutter stays at 1/fps. Max leaves exposure fully automatic.</string>
-    <string name="settings_video_iso_max" tools:ignore="MissingTranslation">Max</string>
+    <string name="settings_video_iso_max" tools:ignore="MissingTranslation">Auto</string>
     <string name="settings_iso_value" translatable="false">ISO %1$d</string>
 
     <!-- Debug overlay (SettingsPage and the quick panel) -->
@@ -124,7 +124,7 @@
 
     <!-- SettingsPage: user-configurable zoom stops -->
     <string name="settings_custom_zoom_levels" tools:ignore="MissingTranslation">Zoom stops</string>
-    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Zoom ratios shown as pills, relative to the 1x lens (for example 0.5, 1, 3, 5). Type all ratios in one field, separated by spaces; Enter adds a separator. Changes save at once. Leave empty for automatic stops; stops the lens cannot reach are hidden.</string>
+    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Zoom ratios shown as pills, relative to the 1x lens (for example 0.5, 1, 3, 5). Type a ratio and press space or Enter to add it as a pill; tap a pill to remove it. Changes save at once. Leave empty for automatic stops; stops the lens cannot reach are hidden.</string>
     <string name="settings_custom_zoom_add" tools:ignore="MissingTranslation">Zoom ratio</string>
     <string name="settings_custom_zoom_add_button" tools:ignore="MissingTranslation">Add zoom stop</string>
 
