@@ -82,11 +82,21 @@ internal fun Camera2Preview(
     onBindRequested: () -> Unit = {},
     /** Plane consumer for the analysis stream; null = no analysis output. */
     analysisConsumer: com.vayunmathur.camera.platform.camera2.AnalysisConsumer? = null,
+    /** 10-bit HLG viewfinder: SurfaceView + HDR window colour mode, preview-only session. */
+    hdrPreview: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val sessionHolder = remember(lensFacing) {
-        Camera2PreviewSession(context, lensFacing, onError, analysisConsumer)
+    val sessionHolder = remember(lensFacing, hdrPreview) {
+        Camera2PreviewSession(context, lensFacing, onError, if (hdrPreview) null else analysisConsumer, hdrPreview)
+    }
+    if (hdrPreview) {
+        DisposableEffect(Unit) {
+            val window = (context as? android.app.Activity)?.window
+            val previous = window?.colorMode
+            window?.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_HDR
+            onDispose { previous?.let { window?.colorMode = it } }
+        }
     }
     var session by remember(sessionHolder) { mutableStateOf<Camera2Session?>(null) }
     val rebuildScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -139,6 +149,19 @@ internal fun Camera2Preview(
         // recomposition lands, black-fill instead of constructing another
         // Camera2PreviewSession.
         Box(modifier = modifier.background(Color.Black))
+        return
+    }
+
+    if (hdrPreview) {
+        AndroidView(
+            factory = { ctx ->
+                android.view.SurfaceView(ctx).also { view ->
+                    liveSession.setDisplayRotationDegrees((view.display?.rotation ?: 0) * 90)
+                    sessionHolder.bridge.attachTo(view)
+                }
+            },
+            modifier = modifier,
+        )
         return
     }
 

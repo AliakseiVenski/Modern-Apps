@@ -2,6 +2,8 @@ package com.vayunmathur.camera.platform.camera2
 
 import android.graphics.SurfaceTexture
 import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.TextureView
 
 /**
@@ -37,7 +39,7 @@ data class PreviewSurfaceState(
 
 class PreviewSurfaceBridge(
     private val onEvent: (PreviewSurfaceEvent) -> Unit,
-) : TextureView.SurfaceTextureListener {
+) : TextureView.SurfaceTextureListener, SurfaceHolder.Callback {
 
     var state: PreviewSurfaceState = PreviewSurfaceState()
         private set
@@ -102,5 +104,36 @@ class PreviewSurfaceBridge(
         if (view.surfaceTextureListener === this) {
             view.surfaceTextureListener = null
         }
+    }
+
+    /** SurfaceView path (HDR viewfinder): the holder owns the [Surface], so it is never released here. */
+    fun attachTo(view: SurfaceView) {
+        view.holder.addCallback(this)
+        val holderSurface = view.holder.surface
+        if (holderSurface.isValid && state.surface == null) {
+            state = PreviewSurfaceState(holderSurface, view.width, view.height)
+            onEvent(PreviewSurfaceEvent.Available(holderSurface, view.width, view.height))
+        }
+    }
+
+    fun detachFrom(view: SurfaceView) = view.holder.removeCallback(this)
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        val created = holder.surface
+        val frame = holder.surfaceFrame
+        state = PreviewSurfaceState(created, frame.width(), frame.height())
+        onEvent(PreviewSurfaceEvent.Available(created, frame.width(), frame.height()))
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        val current = state.surface ?: return
+        state = state.copy(width = width, height = height)
+        onEvent(PreviewSurfaceEvent.SizeChanged(current, width, height))
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        val current = state.surface ?: return
+        state = PreviewSurfaceState()
+        onEvent(PreviewSurfaceEvent.Destroyed(current))
     }
 }

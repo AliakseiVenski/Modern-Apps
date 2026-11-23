@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import com.vayunmathur.camera.platform.hdrSupported
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -97,7 +101,11 @@ internal fun CameraPreviewSurface(
         // Guard: never compose with empty cameraId — fall back to CameraX black/error branch below.
         val camera2Id = state.selectedLens?.logicalCameraId.orEmpty()
         if (camera2Id.isNotEmpty()) {
+            val tuning by viewModel.videoTuning.collectAsState()
+            val hdrPreview = state.isVideoType && tuning.hdr &&
+                remember(camera2Id) { viewModel.hdrSupported(camera2Id) }
             Camera2Preview(
+                hdrPreview = hdrPreview,
                 cameraId = camera2Id,
                 lensFacing = state.selectedLens?.facing,
                 zoomRatio = state.zoomRatio,

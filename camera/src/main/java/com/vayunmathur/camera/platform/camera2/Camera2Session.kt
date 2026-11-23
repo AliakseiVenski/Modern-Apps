@@ -53,6 +53,8 @@ class Camera2Session(
     internal val analysisConsumer: AnalysisConsumer? = null,
     /** Whether the JPEG_R (Ultra HDR) output may be configured at all. */
     internal val ultraHdrEnabled: Boolean = true,
+    /** Preview-only HLG10 session for the HDR video viewfinder (no still/analysis outputs). */
+    internal val hdrPreview: Boolean = false,
 ) {
 
     /** Session lifecycle notifications; all fire on the executor thread. */

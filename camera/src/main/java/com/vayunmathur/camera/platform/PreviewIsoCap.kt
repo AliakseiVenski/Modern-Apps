@@ -27,7 +27,11 @@ internal class PreviewIsoCap {
         setup = newSetup
         controller = null
         lastMs = 0L
+        status.value = newSetup?.let { "ISO cap ${it.isoLimit}: waiting for analysis frames" }
     }
+
+    /** One line for the debug overlay: null when no cap is set, else whether the viewfinder is metering. */
+    val status = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     /** One analysis frame of the preview. */
     @Synchronized
@@ -50,6 +54,7 @@ internal class PreviewIsoCap {
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let {
             session.setIsoCap(it.timeNanos, it.iso)
         }
+        status.value = "ISO cap ${cap.isoLimit}: metering, ISO ${active.current.iso}, luma ${luma.toInt()}"
     }
 
     private companion object {

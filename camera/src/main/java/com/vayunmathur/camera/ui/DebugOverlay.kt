@@ -36,13 +36,19 @@ internal fun DebugOverlay(viewModel: CameraViewModel, modifier: Modifier = Modif
     if (!enabled) return
     val stats = viewModel.debug.stats.collectAsState().value
     val bind = viewModel.debug.bind.collectAsState().value
+    val tuning by viewModel.videoTuning.collectAsState()
+    val capStatus = viewModel.previewIsoCap.status.collectAsState().value
 
     Column(
         modifier = modifier
             .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        debugLines(stats, bind).forEach {
+        val settings = buildList {
+            capStatus?.let { add(DebugLine(it)) }
+            if (tuning.hdr) add(DebugLine("HDR on: HLG viewfinder, no ISO cap preview"))
+        }
+        (debugLines(stats, bind) + settings).forEach {
             Text(it.text, color = it.color, fontSize = 11.sp, lineHeight = 14.sp, fontFamily = FontFamily.Monospace)
         }
     }

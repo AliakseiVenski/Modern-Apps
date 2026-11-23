@@ -37,6 +37,7 @@ internal class Camera2PreviewSession(
     private val lensFacing: LensFacing?,
     onError: (String) -> Unit = {},
     private val analysisConsumer: com.vayunmathur.camera.platform.camera2.AnalysisConsumer? = null,
+    private val hdrPreview: Boolean = false,
 ) {
     val executor = Camera2Executor("Camera2Preview-${lensFacing?.name ?: "unknown"}")
 
@@ -184,6 +185,7 @@ internal class Camera2PreviewSession(
             rawRingConfig = RawRingConfig(enabled = profileIndex < 1 && RawRingGate.ENABLED),
             analysisConsumer = if (profileIndex < 3) analysisConsumer else null,
             ultraHdrEnabled = profileIndex < 1,
+            hdrPreview = hdrPreview,
             listener = object : Camera2Session.Listener {
                 override fun onStreaming(previewSize: com.vayunmathur.camera.platform.camera2.FrameSize) {
                     streamed = true

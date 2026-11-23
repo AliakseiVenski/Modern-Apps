@@ -15,6 +15,13 @@ import android.view.Surface
 internal fun Camera2Session.configureSession(opened: DeviceHandle, gen: Long, reuseOutputs: Boolean = false) {
     val surface = previewSurface ?: return
     if (transition(SessionEvent.CONFIGURE_REQUESTED) !is TransitionResult.Applied) return
+    if (hdrPreview) {
+        runCatching { opened.createHdrCaptureSession(listOf(surface), SessionCallbackImpl(gen)) }.onFailure {
+            dispatch(gen, SessionEvent.CONFIGURE_FAILED)
+            reportError("createHdrCaptureSession failed: ${it.message}")
+        }
+        return
+    }
     if (reuseOutputs) {
         // Retry after a stream-combo failure dropped analysis: every
         // other output already exists; only the capture session is new.

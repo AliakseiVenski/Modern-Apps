@@ -66,6 +66,13 @@ interface DeviceHandle {
     fun createCaptureSession(surfaces: List<Surface>, callback: CaptureSessionCallback)
 
     /**
+     * Creates a regular session whose outputs use the HLG10 dynamic-range profile (API 33), for the
+     * 10-bit HDR viewfinder. The default falls back to a plain session; the Android handle overrides it.
+     */
+    fun createHdrCaptureSession(surfaces: List<Surface>, callback: CaptureSessionCallback) =
+        createCaptureSession(surfaces, callback)
+
+    /**
      * Creates a constrained high-speed session (Phase 5) over [surfaces],
      * which must be a combination the HAL advertised for high speed. The
      * default fails the configure: silently substituting a regular session
@@ -468,6 +475,35 @@ private class AndroidDeviceHandle(
             @Suppress("DEPRECATION")
             device.createCaptureSession(surfaces, stateCallback, handler)
         }
+    }
+
+    override fun createHdrCaptureSession(surfaces: List<Surface>, callback: CaptureSessionCallback) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            createCaptureSession(surfaces, callback)
+            return
+        }
+        val stateCallback = object : CameraCaptureSession.StateCallback() {
+            override fun onConfigured(session: CameraCaptureSession) =
+                callback.onConfigured(AndroidCaptureSessionHandle(device, session, handler))
+
+            override fun onConfigureFailed(session: CameraCaptureSession) =
+                callback.onConfigureFailed()
+
+            override fun onClosed(session: CameraCaptureSession) = callback.onClosed()
+        }
+        val outputs = surfaces.map {
+            OutputConfiguration(it).apply {
+                dynamicRangeProfile = android.hardware.camera2.params.DynamicRangeProfiles.HLG10
+            }
+        }
+        device.createCaptureSession(
+            SessionConfiguration(
+                SessionConfiguration.SESSION_REGULAR,
+                outputs,
+                { command -> handler.post(command) },
+                stateCallback,
+            )
+        )
     }
 
     override fun createReprocessableCaptureSession(
