@@ -210,10 +210,6 @@
     <string name="night_2">Night %1$s%%</string>
 
     <!-- CameraPreviewBox: session bind failed after retries, shown over the black preview -->
-    <string name="settings_video_aspect" tools:ignore="MissingTranslation">Aspect ratio</string>
-    <string name="video_quality_uhd43" tools:ignore="MissingTranslation">2880x2160</string>
-    <string name="video_quality_qhd43" tools:ignore="MissingTranslation">1920x1440</string>
-    <string name="video_quality_fhd43" tools:ignore="MissingTranslation">1440x1080</string>
     <string name="settings_video_bitrate" tools:ignore="MissingTranslation">Video bitrate</string>
     <string name="settings_video_bitrate_auto" tools:ignore="MissingTranslation">Automatic bitrate</string>
     <string name="settings_video_bitrate_value" tools:ignore="MissingTranslation">%1$d Mbps</string>

@@ -14,36 +14,19 @@ enum class VideoQualityTier(val baseBitrateBps: Int, val width: Int, val height:
     UHD(48_000_000, 3840, 2160),
     FHD(25_000_000, 1920, 1080),
     HD(12_000_000, 1280, 720),
-    SD(6_000_000, 720, 480),
+    SD(6_000_000, 720, 480);
 
-    // 4:3 rungs, sized at 0.75 of the 16:9 pixel count.
-    UHD43(36_000_000, 2880, 2160),
-    QHD43(20_000_000, 1920, 1440),
-    FHD43(19_000_000, 1440, 1080);
-
-    /** The frame shape of this rung. */
-    val aspect: VideoAspect get() = if (width * 3 == height * 4) VideoAspect.STANDARD else VideoAspect.WIDE
-
-    /** Next lower rung in its own aspect; the lowest of each stays. */
+    /** Next lower rung; SD has none and stays SD. */
     fun lower(): VideoQualityTier = when (this) {
         UHD -> FHD
         FHD -> HD
         HD -> SD
         SD -> SD
-        UHD43 -> QHD43
-        QHD43 -> FHD43
-        FHD43 -> FHD43
     }
 
     /** Bitrate of this rung at [fps]: the ladder is sized at 30 fps, faster capture needs more bits. */
     fun bitrateFor(fps: Int): Int = (baseBitrateBps * fpsBitrateScale(fps)).roundToInt()
 }
-
-/** Rungs at FHD class and above: the only ones a high-motion boost may spend on. */
-private val BOOST_TIERS = setOf(
-    VideoQualityTier.UHD, VideoQualityTier.FHD,
-    VideoQualityTier.UHD43, VideoQualityTier.QHD43, VideoQualityTier.FHD43,
-)
 
 /** Bitrate multiplier for [fps] against the 30 fps ladder: 1.0 up to 30, +50% at 60, linear between. */
 fun fpsBitrateScale(fps: Int): Double = 1.0 + 0.5 * ((fps - 30) / 30.0).coerceAtLeast(0.0)
@@ -132,7 +115,7 @@ object AdaptiveVideoBitratePolicy {
         // A boost is a quality spend; never spend while storage/thermal forced a cut.
         val boosted = input.motion == SceneMotion.HIGH_MOTION && !steppedDown &&
             input.boostAllowed &&
-            input.baseTier in BOOST_TIERS
+            (input.baseTier == VideoQualityTier.UHD || input.baseTier == VideoQualityTier.FHD)
         val factor = when {
             boosted -> HIGH_MOTION_BOOST_FACTOR
             input.motion == SceneMotion.STATIC -> STATIC_FACTOR

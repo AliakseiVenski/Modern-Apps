@@ -10,12 +10,12 @@ import android.os.Build
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +54,9 @@ private fun currentLensFacing(selectorInt: Int): com.vayunmathur.camera.domain.L
         com.vayunmathur.camera.domain.LensFacing.FRONT
     else com.vayunmathur.camera.domain.LensFacing.BACK
 
+/** Height of a portrait 16:9 video frame per unit of width. */
+private const val VIDEO_FRAME_HEIGHT_PER_WIDTH = 16f / 9f
+
 /**
  * The still-crop ratios in [CameraScreenState.previewAspectRatio] are portrait (3:4, 9:16,
  * ...). In a landscape window the sensor frame rotates with the device, so the preview
@@ -84,16 +87,17 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
     // The still-crop ratios in state are portrait (3:4, 9:16, ...). In a landscape
     // window the sensor frame rotates with the device, so use the reciprocal —
     // otherwise a portrait box in a wide window collapses to a narrow strip (#827).
-    // The video modes box the frame that records (16:9 or 4:3), not the photo crop.
-    val videoAspect by viewModel.effectiveVideoAspect.collectAsState()
-    val baseRatio = if (state.isVideoType) videoAspect.portraitRatio else state.previewAspectRatio
-    val previewRatio = previewRatioForWindow(baseRatio, maxWidth.value, maxHeight.value)
+    val previewRatio = previewRatioForWindow(state.previewAspectRatio, maxWidth.value, maxHeight.value)
     val boxAspect = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else 1f
-    val previewSize = if (previewRatio > boxAspect) {
-        Modifier.fillMaxWidth().aspectRatio(previewRatio)
-    } else {
-        Modifier.fillMaxHeight().aspectRatio(previewRatio)
+    // Video fills the screen width with the 16:9 frame it records (9:16 in portrait), however tall that is:
+    // it is allowed to run under the top and bottom controls, which draw over it.
+    val fullBleedVideo = state.isVideoType && maxHeight > maxWidth
+    val previewSize = when {
+        fullBleedVideo -> Modifier.requiredWidth(maxWidth).requiredHeight(maxWidth * VIDEO_FRAME_HEIGHT_PER_WIDTH)
+        previewRatio > boxAspect -> Modifier.fillMaxWidth().aspectRatio(previewRatio)
+        else -> Modifier.fillMaxHeight().aspectRatio(previewRatio)
     }
+    val previewCorner = if (fullBleedVideo) 0.dp else 12.dp
     // RuntimeShader and the runtime-shader RenderEffect are API 33+. On older
     // releases the portrait preview renders without the background blur.
     val bokehShader = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -107,7 +111,7 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
         // CameraX mirrors the front-camera preview by default; counter it when the
         // user turns selfie mirroring off so the preview matches the saved image (#632).
         .graphicsLayer { scaleX = if (state.mirrorPreview) -1f else 1f }
-        .clip(RoundedCornerShape(12.dp))
+        .clip(RoundedCornerShape(previewCorner))
         .then(
             run {
                 // Warmth/shadows only render where the capture path bakes them (PHOTO/PORTRAIT):
@@ -187,7 +191,7 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
         previewModifier = previewModifier,
     )
 
-    CaptureFlashOverlay(viewModel.shutterFeedback, previewSize.clip(RoundedCornerShape(12.dp)))
+    CaptureFlashOverlay(viewModel.shutterFeedback, previewSize.clip(RoundedCornerShape(previewCorner)))
 
     CameraPreviewOverlays(
         gridEnabled = state.gridEnabled,

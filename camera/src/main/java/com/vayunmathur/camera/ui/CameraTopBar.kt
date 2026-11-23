@@ -62,9 +62,6 @@ internal fun CameraTopBar(
     onGridToggle: () -> Unit,
     onLevelToggle: () -> Unit,
     onAspectCycle: () -> Unit,
-    /** Video modes: label of the current frame shape (null hides the pill) and its cycle action. */
-    videoAspectLabel: String? = null,
-    onVideoAspectCycle: () -> Unit = {},
     onMicToggle: () -> Unit,
     onTimerCycle: () -> Unit,
     iconRotation: Float
@@ -121,15 +118,14 @@ internal fun CameraTopBar(
 
         // The still crop only binds on the photo sessions (PHOTO/PORTRAIT ImageCapture):
         // hide the picker elsewhere so it can't promise a 1:1 video or pano it won't deliver.
-        val aspectText = if (stillCropEnabled) aspectRatio.label else videoAspectLabel
-        if (aspectText != null) {
+        if (stillCropEnabled) {
             val aspectLabel = stringResource(R.string.settings_aspect_ratio)
             IconButton(
-                onClick = if (stillCropEnabled) onAspectCycle else onVideoAspectCycle,
+                onClick = onAspectCycle,
                 modifier = Modifier.height(40.dp).widthIn(min = 40.dp)
             ) {
                 Text(
-                    aspectText,
+                    aspectRatio.label,
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,

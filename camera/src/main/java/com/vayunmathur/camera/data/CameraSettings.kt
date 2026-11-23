@@ -17,8 +17,6 @@ import com.vayunmathur.camera.platform.camera2.AudioInputDeviceSelection
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.CodecSupport
 import com.vayunmathur.camera.platform.FlashMode
-import com.vayunmathur.camera.domain.VideoAspect
-import com.vayunmathur.camera.platform.refreshVideoOptions
 import com.vayunmathur.camera.platform.MotionPhotoDuration
 import com.vayunmathur.camera.platform.PhotoFormat
 import com.vayunmathur.camera.platform.TimerDuration
@@ -61,10 +59,7 @@ private fun CameraViewModel.loadCaptureSettings() {
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: false,
         isoLimit = ds.getString("camera_video_iso_limit")?.toIntOrNull() ?: 0,
         bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
-        aspect = ds.getString("camera_video_aspect")
-            ?.let { name -> VideoAspect.entries.firstOrNull { it.name == name } } ?: VideoAspect.WIDE,
     )
-    effectiveVideoAspectMutable.value = videoTuningMutable.value.aspect
     ds.getString("camera_custom_zoom_levels")?.let { raw ->
         customZoomLevelsMutable.value = raw.split(",")
             .mapNotNull { it.trim().toFloatOrNull() }
@@ -225,28 +220,6 @@ fun CameraViewModel.setVideoIsoLimit(iso: Int) {
     videoTuningMutable.update { it.copy(isoLimit = iso) }
     applyVideoPreviewParams()
     viewModelScope.launch { ds.setString("camera_video_iso_limit", iso.toString()) }
-}
-
-/**
- * Frame shape of recordings. The resolutions on offer follow it, so a resolution picked for the other
- * shape resets to automatic. The viewfinder box takes the new shape at once.
- */
-fun CameraViewModel.setVideoAspect(aspect: VideoAspect) {
-    videoTuningMutable.update { it.copy(aspect = aspect, quality = null) }
-    // A running take keeps its shape; the box follows once the plan is read again afterwards.
-    if (!isRecordingMutable.value) effectiveVideoAspectMutable.value = aspect
-    viewModelScope.launch {
-        ds.setString("camera_video_aspect", aspect.name)
-        ds.setString("camera_video_quality", "")
-        refreshVideoOptions()
-    }
-}
-
-/** Switches between the video shapes the lens offers (top-bar pill in the video modes). */
-fun CameraViewModel.cycleVideoAspect() {
-    val offered = videoOptions.value?.aspects?.takeIf { it.size > 1 } ?: return
-    val current = videoTuningMutable.value.aspect
-    setVideoAspect(offered[(offered.indexOf(current) + 1).mod(offered.size)])
 }
 
 /** Pins the video bitrate in Mbps; 0 = automatic. Read when a recording starts. */

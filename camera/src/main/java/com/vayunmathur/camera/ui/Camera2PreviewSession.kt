@@ -96,15 +96,11 @@ internal class Camera2PreviewSession(
     private var facadeSnapshot: com.vayunmathur.camera.platform.camera2.LensCharacteristicsSnapshot? = null
 
     /**
-     * Video viewfinder camera buffer: the encoder's shape (16:9 or 4:3), since HALs stabilize (EIS)
-     * only when the preview and video streams agree. The HDR SurfaceView path keeps the view's size.
+     * Video viewfinder camera buffer: the encoder's 16:9, since HALs stabilize (EIS) only when the
+     * preview and video streams agree. The HDR SurfaceView path keeps the view's size.
      */
-    private val videoBuffer: FrameSize? = when {
-        !videoPreview || hdrPreview -> null
-        recorder?.plan?.tier?.aspect == com.vayunmathur.camera.domain.VideoAspect.STANDARD ->
-            FrameSize(VIDEO_BUFFER_STANDARD_WIDTH, VIDEO_BUFFER_HEIGHT)
-        else -> FrameSize(VIDEO_BUFFER_WIDTH, VIDEO_BUFFER_HEIGHT)
-    }
+    private val videoBuffer: FrameSize? =
+        if (videoPreview && !hdrPreview) FrameSize(VIDEO_BUFFER_WIDTH, VIDEO_BUFFER_HEIGHT) else null
 
     private fun previewRequest(width: Int, height: Int): FrameSize = videoBuffer ?: FrameSize(width, height)
 
@@ -339,7 +335,6 @@ internal class Camera2PreviewSession(
         const val MAX_PROFILE_INDEX = 3
         const val RECORDER_MAX_PROFILE = 2
         const val VIDEO_BUFFER_WIDTH = 1920
-        const val VIDEO_BUFFER_STANDARD_WIDTH = 1440
         const val VIDEO_BUFFER_HEIGHT = 1080
         const val RETRY_DELAY_MS = 500L
         const val DEGRADE_DELAY_MS = 1000L
