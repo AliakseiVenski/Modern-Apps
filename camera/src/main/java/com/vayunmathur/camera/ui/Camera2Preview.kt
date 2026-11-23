@@ -187,9 +187,8 @@ internal fun Camera2Preview(
     }
     LaunchedEffect(session, zoomRatio) { session?.setZoomRatio(zoomRatio) }
     LaunchedEffect(session, torchOn) { session?.setTorch(torchOn) }
-    LaunchedEffect(session, exposureCompEv) {
-        session?.setExposureCompEv(exposureCompEv)
-    }
+    // Exposure compensation is applied by the screen's effect in EV stops (scaled to the lens's range);
+    // the raw slider value must not be pushed here too, or the two writers fight over one control.
     LaunchedEffect(session, flashSetting) {
         session?.setFlashSetting(flashSetting)
     }

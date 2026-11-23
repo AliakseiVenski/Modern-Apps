@@ -50,9 +50,12 @@ internal class PreviewIsoCap {
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return
         // A tapped point meters its own window (as the HAL's AE does), else the whole frame.
-        val luma = tappedLuma(plane, session)
+        val metered = tappedLuma(plane, session)
             ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) } ?: return
         lastMs = now
+        // Exposure compensation: the exposure control has no AE to nudge, so it steers to a brighter
+        // or darker target. Luma follows exposure^(1/2.2), so +1 EV lowers the reading by 2^(1/2.2).
+        val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
         val frameNanos = NANOS_PER_SECOND / cap.fps
         val active = controller ?: ShutterPriorityController(
             frameNanos, cap.isoMin, cap.isoLimit,
@@ -102,6 +105,7 @@ internal class PreviewIsoCap {
 
     private companion object {
         const val WINDOW_STEP = 4
+        const val LUMA_GAMMA = 2.2
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val INTERVAL_MS = 50L
         const val MAX_GAP_MS = 200L
