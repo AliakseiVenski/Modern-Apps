@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -21,7 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.Route
@@ -59,6 +63,7 @@ fun CameraScreen(
     val view = LocalView.current
     val state = rememberCameraScreenState(viewModel)
     var quickMenuOpen by remember { mutableStateOf(false) }
+    var regionTopPx by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(state.cameraMode) { quickMenuOpen = false }
     // The recording engine reads these settings once at start, so no menu while recording; Slo-Mo has its own path.
     val quickMenuAllowed = !state.isRecording && !state.isSloMo
@@ -165,13 +170,16 @@ fun CameraScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         // Video runs wider than this area, under the bars: no clipping, drawn behind them.
-                        .then(if (state.isVideoType) Modifier.zIndex(-1f) else Modifier.clipToBounds()),
+                        .then(if (state.isVideoType) Modifier.zIndex(-1f) else Modifier.clipToBounds())
+                        // The top bar's height: where this area starts inside the controls column.
+                        .onGloballyPositioned { regionTopPx = it.positionInParent().y },
                     contentAlignment = Alignment.Center
                 ) {
                     CameraPreviewBox(
                         state = state,
                         viewModel = viewModel,
                         animatedRotation = animatedRotation,
+                        videoTopInset = with(LocalDensity.current) { regionTopPx.toDp() },
                     )
                     DebugOverlay(viewModel, Modifier.align(Alignment.TopStart).padding(8.dp))
                     if (quickMenuOpen && quickMenuAllowed) {

@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -78,6 +79,8 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
     state: CameraScreenState,
     viewModel: CameraViewModel,
     animatedRotation: Float,
+    /** Height of the bar above this area: video starts at the very top of the screen content, under it. */
+    videoTopInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val cameraMode = state.cameraMode
     val maskBitmap = state.maskBitmap
@@ -93,7 +96,15 @@ internal fun BoxWithConstraintsScope.CameraPreviewBox(
     // it is allowed to run under the top and bottom controls, which draw over it.
     val fullBleedVideo = state.isVideoType && maxHeight > maxWidth
     val previewSize = when {
-        fullBleedVideo -> Modifier.requiredWidth(maxWidth).requiredHeight(maxWidth * VIDEO_FRAME_HEIGHT_PER_WIDTH)
+        // Centred in this area by default; shifted so its top sits at the top of the screen content,
+        // just under the system bar, leaving that strip black however tall the frame is.
+        fullBleedVideo -> {
+            val frameHeight = maxWidth * VIDEO_FRAME_HEIGHT_PER_WIDTH
+            Modifier
+                .requiredWidth(maxWidth)
+                .requiredHeight(frameHeight)
+                .offset(y = (frameHeight - maxHeight) / 2 - videoTopInset)
+        }
         previewRatio > boxAspect -> Modifier.fillMaxWidth().aspectRatio(previewRatio)
         else -> Modifier.fillMaxHeight().aspectRatio(previewRatio)
     }
