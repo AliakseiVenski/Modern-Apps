@@ -113,7 +113,7 @@ class RawImageReaderOutput(
     width: Int,
     height: Int,
     private val format: RingFormat,
-    maxImages: Int = RawRingConfig.DEFAULT_CAPACITY,
+    maxImages: Int = RawRingConfig.DEFAULT_CAPACITY + 1,
     private val handler: Handler,
 ) : RawRingOutput {
 

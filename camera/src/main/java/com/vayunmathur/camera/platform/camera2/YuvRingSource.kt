@@ -147,7 +147,7 @@ class ImageRingHeldFrame(private val image: Image) : RingHeldFrame {
 class YuvRingOutput(
     width: Int,
     height: Int,
-    maxImages: Int = ReprocessRingConfig.DEFAULT_CAPACITY,
+    maxImages: Int = ReprocessRingConfig.DEFAULT_CAPACITY + 1,
     private val handler: Handler,
 ) : RingOutput {
 
