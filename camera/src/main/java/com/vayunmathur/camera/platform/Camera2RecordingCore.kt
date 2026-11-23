@@ -185,7 +185,9 @@ class Camera2RecordingCore(
                 }
             }
         }
-        muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4).also {
+            it.setOrientationHint(config.orientationDegrees)
+        }
     }
 
     fun startVideoCodec() {

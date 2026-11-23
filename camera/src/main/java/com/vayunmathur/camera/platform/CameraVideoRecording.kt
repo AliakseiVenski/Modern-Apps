@@ -189,6 +189,15 @@ internal fun CameraViewModel.startRecording() {
         isoMin = cameraSnapshot0?.second?.sensitivityRange?.lower ?: 50,
         isoSensorMax = cameraSnapshot0?.second?.sensitivityRange?.upper ?: Int.MAX_VALUE,
         isoBoostMax = cameraSnapshot0?.second?.postRawBoostRange?.upper ?: 100,
+        orientationDegrees = cameraSnapshot0?.second?.let { snapshot ->
+            val displayRotation = (app.getSystemService(android.hardware.display.DisplayManager::class.java)
+                ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.rotation ?: 0) * 90
+            if (snapshot.lensFacing == com.vayunmathur.camera.domain.LensFacing.FRONT) {
+                (snapshot.sensorOrientationDegrees + displayRotation) % 360
+            } else {
+                (snapshot.sensorOrientationDegrees - displayRotation + 360) % 360
+            }
+        } ?: 0,
         zoomRatio = zoomRatioMutable.value.let { ratio ->
             cameraSnapshot0?.second?.zoomRatioRange?.let { ratio.coerceIn(it.lower, it.upper) } ?: ratio
         },

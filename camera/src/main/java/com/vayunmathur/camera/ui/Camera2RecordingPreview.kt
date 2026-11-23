@@ -29,13 +29,29 @@ internal fun Camera2RecordingPreview(
         Box(modifier = modifier.background(Color.Black))
         return
     }
+    val bufferSize = viewModel.camera2RecordingState.engine?.ownedPreviewBufferSize
     AndroidView(
         factory = { ctx ->
             TextureView(ctx).also { view ->
                 view.setSurfaceTexture(liveTexture)
                 viewModel.camera2RecordingState.engine?.markPreviewTextureBorrowed()
+                // A TextureView stretches the buffer to its bounds: scale it back to the buffer's
+                // aspect, filling the view (centre crop), or the image looks squeezed.
+                view.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
+                    if (bufferSize != null) fillKeepingAspect(v as TextureView, r - l, b - t, bufferSize)
+                }
             }
         },
         modifier = modifier,
     )
+}
+
+private fun fillKeepingAspect(view: TextureView, width: Int, height: Int, buffer: Pair<Int, Int>) {
+    if (width <= 0 || height <= 0) return
+    val (visibleW, visibleH) = if (height >= width) buffer.second to buffer.first else buffer
+    val bufferAspect = visibleW.toFloat() / visibleH
+    val viewAspect = width.toFloat() / height
+    val scaleX = if (bufferAspect > viewAspect) bufferAspect / viewAspect else 1f
+    val scaleY = if (bufferAspect < viewAspect) viewAspect / bufferAspect else 1f
+    view.setTransform(android.graphics.Matrix().apply { setScale(scaleX, scaleY, width / 2f, height / 2f) })
 }

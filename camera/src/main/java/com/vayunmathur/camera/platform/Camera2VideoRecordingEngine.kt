@@ -77,6 +77,8 @@ data class CustomRecordingConfig(
     val isoSensorMax: Int = Int.MAX_VALUE,
     /** `CONTROL_ZOOM_RATIO` at start: the lens the user picked (a multi-camera switches lens on the ratio). */
     val zoomRatio: Float = 1f,
+    /** Clockwise rotation players apply to the frames (MP4 orientation hint): the sensor is mounted rotated. */
+    val orientationDegrees: Int = 0,
     val isoBoostMax: Int = 100,
 )
 
@@ -121,6 +123,11 @@ class Camera2VideoRecordingEngine(
     private var cameraHandler: Handler? = null
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
+
+    /** Size of the owned preview buffers (sensor orientation), so the view can keep their aspect. */
+    @Volatile
+    var ownedPreviewBufferSize: Pair<Int, Int>? = null
+        private set
     private var analysisReader: android.media.ImageReader? = null
     private var ownedPreviewTexture: android.graphics.SurfaceTexture? = null
     private var ownedPreviewSurface: Surface? = null
@@ -268,10 +275,10 @@ class Camera2VideoRecordingEngine(
                 // Preview never needs encoder resolution: cap at 1080p so
                 // the (encoder + preview + analysis) stream combination
                 // stays within guaranteed HAL limits at UHD tiers.
-                setDefaultBufferSize(
-                    minOf(config.width, PREVIEW_MAX_WIDTH),
-                    minOf(config.height, PREVIEW_MAX_HEIGHT),
-                )
+                val width = minOf(config.width, PREVIEW_MAX_WIDTH)
+                val height = minOf(config.height, PREVIEW_MAX_HEIGHT)
+                setDefaultBufferSize(width, height)
+                ownedPreviewBufferSize = width to height
             }
             ownedPreviewTexture = texture
             Surface(texture).also { ownedPreviewSurface = it }
