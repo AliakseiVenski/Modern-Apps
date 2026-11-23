@@ -34,6 +34,10 @@ data class Camera2ControlState(
     /** Post-processing toggles (#662): true requests HIGH_QUALITY, false OFF. */
     val noiseReductionHighQuality: Boolean = true,
     val edgeHighQuality: Boolean = true,
+    /** Video modes only: fixed fps, `CONTROL_VIDEO_STABILIZATION_MODE` and OIS for the viewfinder (null/false = unset). */
+    val videoFps: Int? = null,
+    val videoStabilizationMode: Int? = null,
+    val opticalStabilization: Boolean = false,
 ) {
     companion object {
         val DEFAULT = Camera2ControlState()
@@ -66,6 +70,9 @@ data class ResolvedRequestParams(
     val noiseReductionMode: Int = android.hardware.camera2.CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY,
     val edgeMode: Int = android.hardware.camera2.CameraMetadata.EDGE_MODE_HIGH_QUALITY,
     val tonemapMode: Int? = android.hardware.camera2.CameraMetadata.TONEMAP_MODE_HIGH_QUALITY,
+    val videoFps: Int? = null,
+    val videoStabilizationMode: Int? = null,
+    val opticalStabilization: Boolean = false,
 )
 
 object Camera2Controls {
@@ -144,6 +151,9 @@ object Camera2Controls {
             } else {
                 null
             },
+            videoFps = state.videoFps,
+            videoStabilizationMode = state.videoStabilizationMode,
+            opticalStabilization = state.opticalStabilization,
         )
     }
 

@@ -50,6 +50,7 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
         session.previewFrameObserver = { raw ->
             debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
         }
+        applyVideoPreviewParams()
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }
     }
 }

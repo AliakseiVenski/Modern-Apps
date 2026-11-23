@@ -66,3 +66,77 @@ suspend fun CameraViewModel.refreshVideoOptions() {
         ).any,
     )
 }
+
+/** What a recording in one mode will use; the preview follows the same plan. */
+internal data class VideoPlan(
+    val fps: Int,
+    val tier: com.vayunmathur.camera.domain.VideoQualityTier,
+    val mime: String,
+    val useAv1: Boolean,
+    val useHevc: Boolean,
+    val stabilization: com.vayunmathur.camera.domain.VideoStabilizationChoice,
+)
+
+/**
+ * Codec from the bind-time settings, then rate first and the best tier that works at it: 60 fps when
+ * the lens, the PRIVATE stream size and the encoder all allow it (UHD60 before FHD60 before 30 fps),
+ * otherwise the next rate down. A tier must be a stream size the lens advertises, or the session
+ * configure fails (UHD on a 1080p front lens).
+ */
+internal fun CameraViewModel.planVideo(
+    mode: CameraMode,
+    cameraId: String?,
+    snapshot: LensCharacteristicsSnapshot?,
+): VideoPlan {
+    val selectedCodec = bindTimeSettings.value.videoCodec
+    val useAv1 = selectedCodec == VideoCodec.AV1 && CodecSupport.isHardwareAv1EncoderAvailable
+    val useHevc = !useAv1 && selectedCodec != VideoCodec.AVC && CodecSupport.isHevcEncoderAvailable
+    val mime = when {
+        useAv1 -> android.media.MediaFormat.MIMETYPE_VIDEO_AV1
+        useHevc -> android.media.MediaFormat.MIMETYPE_VIDEO_HEVC
+        else -> android.media.MediaFormat.MIMETYPE_VIDEO_AVC
+    }
+    val privateSizes = snapshot?.streamConfig?.sizesFor(ImageFormat.PRIVATE).orEmpty()
+    val tuning = videoTuningMutable.value
+    val fixedRates = VideoFpsPolicy.fixedRates(snapshot?.aeTargetFpsRanges.orEmpty().map { it.lower to it.upper })
+    val tiers = com.vayunmathur.camera.domain.VideoQualityTier.entries
+    fun fits(candidate: com.vayunmathur.camera.domain.VideoQualityTier, fps: Int): Boolean =
+        (privateSizes.isEmpty() || privateSizes.any { it.width == candidate.width && it.height == candidate.height }) &&
+            (cameraId == null || maxStreamFps(cameraId, Size(candidate.width, candidate.height)) >= fps) &&
+            CodecSupport.supportsVideoBitrate(mime, candidate.width, candidate.height, fps, candidate.bitrateFor(fps))
+    val choice = VideoFpsPolicy
+        .candidates(fixedRates, tuning.fps, cinematic = mode == CameraMode.CINEMATIC)
+        .firstNotNullOfOrNull { rate -> tiers.firstOrNull { fits(it, rate) }?.let { rate to it } }
+    return VideoPlan(
+        fps = choice?.first ?: VideoFpsPolicy.STANDARD,
+        tier = choice?.second ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD,
+        mime = mime,
+        useAv1 = useAv1,
+        useHevc = useHevc,
+        stabilization = VideoStabilizationPolicy.choose(
+            // Cinematic exists for stabilized footage, so it stays on whatever the switch says.
+            enabled = tuning.stabilizationEnabled || mode == CameraMode.CINEMATIC,
+            videoModes = snapshot?.videoStabilizationModes.orEmpty(),
+            opticalModes = snapshot?.opticalStabilizationModes.orEmpty(),
+            sdkInt = Build.VERSION.SDK_INT,
+        ),
+    )
+}
+
+private val VIDEO_PREVIEW_MODES = setOf(CameraMode.VIDEO, CameraMode.TIMELAPSE, CameraMode.CINEMATIC)
+
+/**
+ * Puts the planned frame rate and stabilization on the live viewfinder, so changing either shows
+ * at once and the preview matches the recording. Photo and Slo-Mo modes get the plain preview.
+ */
+internal fun CameraViewModel.applyVideoPreviewParams() {
+    val session = activeCamera2Session ?: return
+    val mode = cameraModeMutable.value
+    if (mode !in VIDEO_PREVIEW_MODES) {
+        session.setVideoParams(null, null, false)
+        return
+    }
+    val snapshot = session.characteristics
+    val plan = planVideo(mode, snapshot.cameraId, snapshot)
+    session.setVideoParams(plan.fps, plan.stabilization.videoMode, plan.stabilization.opticalOn)
+}

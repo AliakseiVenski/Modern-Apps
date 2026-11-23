@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import com.vayunmathur.camera.platform.AspectRatioOption
 import com.vayunmathur.camera.platform.CameraMode
 import com.vayunmathur.camera.platform.VideoTuning
+import com.vayunmathur.camera.platform.applyVideoPreviewParams
 import com.vayunmathur.camera.platform.refreshZoomLevels
 import com.vayunmathur.camera.platform.camera2.AudioInputDeviceSelection
 import com.vayunmathur.camera.platform.CameraViewModel
@@ -192,11 +193,13 @@ fun CameraViewModel.setMotionPhotoEnabled(enabled: Boolean) {
 
 fun CameraViewModel.setVideoFps(fps: Int) {
     videoTuningMutable.update { it.copy(fps = fps) }
+    applyVideoPreviewParams()
     viewModelScope.launch { ds.setString("camera_video_fps", fps.toString()) }
 }
 
 fun CameraViewModel.setVideoStabilizationEnabled(enabled: Boolean) {
     videoTuningMutable.update { it.copy(stabilizationEnabled = enabled) }
+    applyVideoPreviewParams()
     viewModelScope.launch { ds.setString("camera_video_stabilization", enabled.toString()) }
 }
 

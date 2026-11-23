@@ -126,64 +126,21 @@ internal fun CameraViewModel.startRecording() {
     if (isRecordingMutable.value || camera2RecordingMutable.value) return
     val recordingMode = cameraModeMutable.value
 
-    // Codec choice from the bind-time settings snapshot, probed against the
-    // platform encoder registry (the Camera2 engine configures MediaCodec
-    // directly; an encoder that cannot take the size/rate rejects the tier).
-    val selectedCodec = bindTimeSettings.value.videoCodec
-    val useAv1 = selectedCodec == VideoCodec.AV1 && CodecSupport.isHardwareAv1EncoderAvailable
-    val useHevc = !useAv1 && selectedCodec != VideoCodec.AVC && CodecSupport.isHevcEncoderAvailable
-    recordingWithAv1 = useAv1
-    recordingWithHevc = useHevc
-    val mime = when {
-        useAv1 -> android.media.MediaFormat.MIMETYPE_VIDEO_AV1
-        useHevc -> android.media.MediaFormat.MIMETYPE_VIDEO_HEVC
-        else -> android.media.MediaFormat.MIMETYPE_VIDEO_AVC
-    }
-    // Rate first, then the best tier that works at it: 60 fps when the lens, the
-    // stream size and the encoder all allow it (UHD60 before FHD60 before 30 fps),
-    // otherwise the next rate down. Tier must also be a stream size this lens
-    // advertises (PRIVATE is the honest proxy for the encoder surface): a tier the
-    // HAL cannot stream fails the capture-session configure, as UHD on a 1080p
-    // front lens does.
     val cameraSnapshot0 = recordingCameraSnapshot()
     val cameraId0 = cameraSnapshot0?.first
-    val snapshot0 = cameraSnapshot0?.second
     val facing0 = selectedLensMutable.value?.facing ?: currentLensFacing()
-    val privateSizes = snapshot0?.streamConfig
-        ?.sizesFor(android.graphics.ImageFormat.PRIVATE).orEmpty()
-    val tuning = videoTuningMutable.value
-    val fixedRates = com.vayunmathur.camera.domain.VideoFpsPolicy
-        .fixedRates(snapshot0?.aeTargetFpsRanges.orEmpty().map { it.lower to it.upper })
-    val tiers = listOf(
-        com.vayunmathur.camera.domain.VideoQualityTier.UHD,
-        com.vayunmathur.camera.domain.VideoQualityTier.FHD,
-        com.vayunmathur.camera.domain.VideoQualityTier.HD,
-        com.vayunmathur.camera.domain.VideoQualityTier.SD,
-    )
-    fun fits(candidate: com.vayunmathur.camera.domain.VideoQualityTier, fps: Int): Boolean =
-        (privateSizes.isEmpty() || privateSizes.any {
-            it.width == candidate.width && it.height == candidate.height
-        }) &&
-            (cameraId0 == null ||
-                maxStreamFps(cameraId0, android.util.Size(candidate.width, candidate.height)) >= fps) &&
-            CodecSupport.supportsVideoBitrate(
-                mime, candidate.width, candidate.height, fps, candidate.bitrateFor(fps)
-            )
-    val fpsChoice = com.vayunmathur.camera.domain.VideoFpsPolicy
-        .candidates(fixedRates, tuning.fps, cinematic = recordingMode == CameraMode.CINEMATIC)
-        .firstNotNullOfOrNull { rate -> tiers.firstOrNull { fits(it, rate) }?.let { rate to it } }
-    val fps = fpsChoice?.first ?: com.vayunmathur.camera.domain.VideoFpsPolicy.STANDARD
-    val tier = fpsChoice?.second ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD
+    // The same plan the viewfinder preview follows, so what you see is what records.
+    val plan = planVideo(recordingMode, cameraId0, cameraSnapshot0?.second)
+    val useAv1 = plan.useAv1
+    val useHevc = plan.useHevc
+    val mime = plan.mime
+    val fps = plan.fps
+    val tier = plan.tier
+    val stabilization = plan.stabilization
+    recordingWithAv1 = useAv1
+    recordingWithHevc = useHevc
     boundVideoQualityTier = tier
     videoFpsTarget = fps
-
-    val stabilization = com.vayunmathur.camera.domain.VideoStabilizationPolicy.choose(
-        // Cinematic exists for stabilized footage, so it stays on whatever the switch says.
-        enabled = tuning.stabilizationEnabled || recordingMode == CameraMode.CINEMATIC,
-        videoModes = snapshot0?.videoStabilizationModes.orEmpty(),
-        opticalModes = snapshot0?.opticalStabilizationModes.orEmpty(),
-        sdkInt = android.os.Build.VERSION.SDK_INT,
-    )
 
     val decision = computeAdaptiveBitrateDecision(tier, useAv1 = useAv1, useHevc = useHevc, fps = fps)
     boundVideoBitrateBps = decision.bitrateBps

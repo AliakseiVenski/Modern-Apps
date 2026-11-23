@@ -237,7 +237,9 @@ class Camera2VideoRecordingEngine(
         // SurfaceTexture surface (exposed via ownedPreviewSurface() for a
         // TextureView to render once the UI migrates off CameraX preview).
         val effectivePreview = previewSurface ?: run {
-            val texture = android.graphics.SurfaceTexture(PREVIEW_TEXTURE_ID).apply {
+            // Created detached (no GL texture name): a TextureView adopts it later, and one
+            // still attached to a GL context renders black there.
+            val texture = android.graphics.SurfaceTexture(false).apply {
                 // Preview never needs encoder resolution: cap at 1080p so
                 // the (encoder + preview + analysis) stream combination
                 // stays within guaranteed HAL limits at UHD tiers.
@@ -413,7 +415,6 @@ class Camera2VideoRecordingEngine(
     }
 
     companion object {
-        private const val PREVIEW_TEXTURE_ID = 1
         private const val PREVIEW_MAX_WIDTH = 1920
         private const val PREVIEW_MAX_HEIGHT = 1080
         private const val ANALYSIS_WIDTH = 640

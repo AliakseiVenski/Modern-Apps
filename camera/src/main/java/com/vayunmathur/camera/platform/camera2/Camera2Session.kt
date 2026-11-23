@@ -205,6 +205,18 @@ class Camera2Session(
         }
     }
 
+    /** Video modes: fixed fps and stabilization on the viewfinder request (nulls clear them). */
+    fun setVideoParams(fps: Int?, stabilizationMode: Int?, opticalStabilization: Boolean) {
+        executor.execute {
+            controls = controls.copy(
+                videoFps = fps,
+                videoStabilizationMode = stabilizationMode,
+                opticalStabilization = opticalStabilization,
+            )
+            issueRepeatingRequest()
+        }
+    }
+
     /** Post-processing toggles (#662); preview + stills inherit them. */
     fun setPostProcessing(noiseReductionHighQuality: Boolean, edgeHighQuality: Boolean) {
         executor.execute {

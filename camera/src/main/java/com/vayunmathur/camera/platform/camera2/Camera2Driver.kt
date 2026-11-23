@@ -249,6 +249,11 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
     set(CaptureRequest.NOISE_REDUCTION_MODE, params.noiseReductionMode)
     set(CaptureRequest.EDGE_MODE, params.edgeMode)
     params.tonemapMode?.let { set(CaptureRequest.TONEMAP_MODE, it) }
+    params.videoFps?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, android.util.Range(it, it)) }
+    params.videoStabilizationMode?.let { set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it) }
+    if (params.opticalStabilization) {
+        set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON)
+    }
     if (params.afRegions.isNotEmpty()) {
         set(
             CaptureRequest.CONTROL_AF_REGIONS,
