@@ -91,6 +91,25 @@ internal fun Camera2Preview(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // Release the camera while the app is stopped (screen lock, home) and open a fresh session on
+    // return: the OS drops the device in the background, and a session left behind burns through the
+    // profile ladder against a camera it may not open, ending on the bind-failed error.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var started by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) started = true
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) started = false
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    if (!started) {
+        Box(modifier = modifier.background(Color.Black))
+        return
+    }
     val sessionHolder = remember(lensFacing, hdrPreview) {
         Camera2PreviewSession(context, lensFacing, onError, if (hdrPreview) null else analysisConsumer, hdrPreview)
     }
