@@ -75,6 +75,8 @@ data class CustomRecordingConfig(
     val isoMin: Int = 50,
     /** Sensor ISO ceiling and post-raw boost ceiling (100 = 1x): ISO above the first goes out as digital boost. */
     val isoSensorMax: Int = Int.MAX_VALUE,
+    /** `CONTROL_ZOOM_RATIO` at start: the lens the user picked (a multi-camera switches lens on the ratio). */
+    val zoomRatio: Float = 1f,
     val isoBoostMax: Int = 100,
 )
 
@@ -311,6 +313,9 @@ class Camera2VideoRecordingEngine(
                             CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                             android.util.Range(config.captureFps, config.captureFps)
                         )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            set(CaptureRequest.CONTROL_ZOOM_RATIO, config.zoomRatio)
+                        }
                         config.stabilizationMode?.let {
                             set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it)
                         }
@@ -432,6 +437,21 @@ class Camera2VideoRecordingEngine(
             builder.set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, boost)
         }
         builder.set(CaptureRequest.SENSOR_FRAME_DURATION, NANOS_PER_SECOND / config.captureFps)
+    }
+
+    /** Live zoom / lens switch during the take: the HAL picks the lens from the ratio. */
+    fun setZoomRatio(ratio: Float) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val builder = requestBuilder ?: return
+        val session = captureSession ?: return
+        builder.set(CaptureRequest.CONTROL_ZOOM_RATIO, ratio)
+        try {
+            session.setRepeatingRequest(builder.build(), frameResultCallback(), cameraHandler)
+        } catch (e: IllegalStateException) {
+            Log.status("Camera2Recorder", "zoom update skipped: session closed", e)
+        } catch (e: android.hardware.camera2.CameraAccessException) {
+            Log.status("Camera2Recorder", "zoom update failed", e)
+        }
     }
 
     private fun applyExposureLive(setting: ExposureSetting) {

@@ -189,6 +189,9 @@ internal fun CameraViewModel.startRecording() {
         isoMin = cameraSnapshot0?.second?.sensitivityRange?.lower ?: 50,
         isoSensorMax = cameraSnapshot0?.second?.sensitivityRange?.upper ?: Int.MAX_VALUE,
         isoBoostMax = cameraSnapshot0?.second?.postRawBoostRange?.upper ?: 100,
+        zoomRatio = zoomRatioMutable.value.let { ratio ->
+            cameraSnapshot0?.second?.zoomRatioRange?.let { ratio.coerceIn(it.lower, it.upper) } ?: ratio
+        },
     )
     debug.reset()
     debug.bind.value = VideoBindSummary(

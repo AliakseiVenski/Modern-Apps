@@ -28,6 +28,14 @@ fun CameraViewModel.onViewfinderZoomRatio(ratio: Float) {
 }
 
 fun CameraViewModel.setZoomRatio(ratio: Float) {
+    camera2RecordingState.engine?.let { engine ->
+        // A take in progress: the recording engine owns the camera, zoom (and so the lens) goes to it.
+        val range = recordingCameraSnapshot()?.second?.zoomRatioRange
+        val clamped = if (range != null) ratio.coerceIn(range.lower, range.upper) else ratio
+        zoomRatioMutable.value = clamped
+        engine.setZoomRatio(clamped)
+        return
+    }
     val session = activeCamera2Session
     val range = session?.characteristics?.zoomRatioRange
     val clamped = if (range != null) ratio.coerceIn(range.lower, range.upper) else ratio
