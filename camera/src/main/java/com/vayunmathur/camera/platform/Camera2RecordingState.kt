@@ -18,6 +18,9 @@ internal class Camera2RecordingState {
     /** Encoder prepared ahead for the viewfinder session's next take. */
     var prepared: PreparedRecorder? = null
 
+    /** Running lens-switch zoom glide (a zoom-stop tap during a take); null when idle. */
+    var zoomGlide: kotlinx.coroutines.Job? = null
+
     /** Plan of the in-flight session take, to re-arm the next one. */
     var sessionPlan: RecorderPlan? = null
 

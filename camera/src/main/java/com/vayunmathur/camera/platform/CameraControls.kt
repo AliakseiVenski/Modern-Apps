@@ -29,7 +29,52 @@ fun CameraViewModel.onViewfinderZoomRatio(ratio: Float) {
     viewModelScope.launch { ds.setString("camera_zoom_ratio", ratio.toString()) }
 }
 
-fun CameraViewModel.setZoomRatio(ratio: Float) {
+/** Zoom-stop taps during a take glide between lenses over this long (more for bigger jumps). */
+private const val ZOOM_GLIDE_BASE_MS = 500L
+private const val ZOOM_GLIDE_PER_OCTAVE_MS = 300L
+private const val ZOOM_GLIDE_MAX_MS = 1200L
+private const val ZOOM_GLIDE_FRAME_MS = 16L
+private const val ZOOM_GLIDE_MIN_OCTAVES = 0.07f
+
+/**
+ * Sets the zoom ratio. With [smooth] and a take running, the ratio glides (eased, constant speed in
+ * octaves) to the target instead of jumping, so a lens change reads as one camera zooming through the
+ * other; the HAL hands over between lenses at its own thresholds on the way. Otherwise it is instant.
+ */
+fun CameraViewModel.setZoomRatio(ratio: Float, smooth: Boolean = false) {
+    camera2RecordingState.zoomGlide?.cancel()
+    camera2RecordingState.zoomGlide = null
+    val range = (activeCamera2Session?.characteristics ?: recordingCameraSnapshot()?.second)?.zoomRatioRange
+    val target = if (range != null) ratio.coerceIn(range.lower, range.upper) else ratio
+    val from = zoomRatioMutable.value
+    val octaves = if (from > 0f && target > 0f) kotlin.math.abs(kotlin.math.log2(target / from)) else 0f
+    if (!smooth || !isRecordingMutable.value || octaves < ZOOM_GLIDE_MIN_OCTAVES) {
+        applyZoomRatio(target)
+        return
+    }
+    val durationMs = (ZOOM_GLIDE_BASE_MS + ZOOM_GLIDE_PER_OCTAVE_MS * octaves).toLong().coerceAtMost(ZOOM_GLIDE_MAX_MS)
+    camera2RecordingState.zoomGlide = viewModelScope.launch {
+        val startMs = android.os.SystemClock.uptimeMillis()
+        while (true) {
+            val t = ((android.os.SystemClock.uptimeMillis() - startMs).toFloat() / durationMs).coerceAtMost(1f)
+            val eased = t * t * (3f - 2f * t)
+            val step = from * Math.pow((target / from).toDouble(), eased.toDouble()).toFloat()
+            if (t >= 1f) break
+            pushZoomRatio(step)
+            delay(ZOOM_GLIDE_FRAME_MS)
+        }
+        applyZoomRatio(target)
+    }
+}
+
+/** One frame of a glide: reaches the camera and the zoom bar, nothing persisted. */
+private fun CameraViewModel.pushZoomRatio(ratio: Float) {
+    zoomRatioMutable.value = ratio
+    camera2RecordingState.engine?.setZoomRatio(ratio)
+    activeCamera2Session?.setZoomRatio(ratio)
+}
+
+private fun CameraViewModel.applyZoomRatio(ratio: Float) {
     camera2RecordingState.engine?.let { engine ->
         // A take in progress: the recording engine owns the camera, zoom (and so the lens) goes to it.
         val range = recordingCameraSnapshot()?.second?.zoomRatioRange
