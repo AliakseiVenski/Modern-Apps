@@ -54,7 +54,13 @@ internal class PreviewIsoCap {
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let {
             session.setIsoCap(it.timeNanos, it.iso)
         }
-        status.value = "ISO cap ${cap.isoLimit}: metering, ISO ${active.current.iso}, luma ${luma.toInt()}"
+        val snapshot = session.characteristics
+        val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
+            active.current.iso,
+            snapshot.sensitivityRange?.upper ?: active.current.iso,
+            snapshot.postRawBoostRange?.upper ?: com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST,
+        )
+        status.value = "ISO cap ${cap.isoLimit}: ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
     }
 
     private companion object {

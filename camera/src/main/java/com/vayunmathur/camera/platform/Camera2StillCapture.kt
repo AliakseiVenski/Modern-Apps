@@ -52,6 +52,7 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
         }
         applyVideoPreviewParams()
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }
+        viewModelScope.launch { refreshVideoOptions() }
     }
 }
 

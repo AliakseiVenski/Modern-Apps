@@ -128,7 +128,7 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     PillRow(
                         title = stringResource(R.string.settings_video_iso_limit),
                         choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
-                            isoChoices.map { it to it.toString() },
+                            isoChoices.asReversed().map { it to it.toString() },
                         selected = tuning.isoLimit,
                         onSelect = { viewModel.setVideoIsoLimit(it) },
                     )

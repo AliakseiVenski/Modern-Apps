@@ -95,7 +95,7 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
             )
             ChoiceDropdown(
                 choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
-                    isoChoices.map { it to stringResource(R.string.settings_iso_value, it) },
+                    isoChoices.asReversed().map { it to stringResource(R.string.settings_iso_value, it) },
                 selected = tuning.isoLimit,
                 onSelect = { viewModel.setVideoIsoLimit(it) },
             )

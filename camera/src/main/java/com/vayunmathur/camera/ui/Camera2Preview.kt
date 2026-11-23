@@ -103,6 +103,13 @@ internal fun Camera2Preview(
     var session by remember(sessionHolder) { mutableStateOf<Camera2Session?>(null) }
     var streaming by remember(sessionHolder) { mutableStateOf(false) }
     sessionHolder.onStreamingStarted = { streaming = true }
+    // One timer per holder: the label must survive session rebuilds between profile attempts.
+    var initDelayPassed by remember(sessionHolder) { mutableStateOf(false) }
+    LaunchedEffect(sessionHolder) {
+        kotlinx.coroutines.delay(300)
+        initDelayPassed = true
+    }
+    val showInit = initDelayPassed && !streaming
     val rebuildScope = androidx.compose.runtime.rememberCoroutineScope()
     // A configure/device failure before the first frame rebuilds the
     // session with the next, smaller output profile (the holder owns
@@ -114,6 +121,7 @@ internal fun Camera2Preview(
             // A first failure retries the same profile quickly (cold HAL).
             kotlinx.coroutines.delay(sessionHolder.nextRebuildDelayMs)
             if (sessionHolder.isClosedForRebuild()) return@launch
+            streaming = false
             val rebuilt = sessionHolder.rebuildNext()
             session = rebuilt
             if (rebuilt != null) onSessionChanged(rebuilt)
@@ -153,7 +161,7 @@ internal fun Camera2Preview(
         // recomposition lands, black-fill instead of constructing another
         // Camera2PreviewSession.
         Box(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-            CameraInitOverlay()
+            if (showInit) CameraInitOverlay()
         }
         return
     }
@@ -182,6 +190,6 @@ internal fun Camera2Preview(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (!streaming) CameraInitOverlay()
+        if (showInit) CameraInitOverlay()
     }
 }
