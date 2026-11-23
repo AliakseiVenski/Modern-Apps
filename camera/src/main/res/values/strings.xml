@@ -210,6 +210,10 @@
     <string name="night_2">Night %1$s%%</string>
 
     <!-- CameraPreviewBox: session bind failed after retries, shown over the black preview -->
+    <string name="settings_category_video" tools:ignore="MissingTranslation">Video</string>
+    <string name="settings_category_photo" tools:ignore="MissingTranslation">Photo</string>
+    <string name="settings_category_common" tools:ignore="MissingTranslation">Photo and video</string>
+    <string name="settings_category_system" tools:ignore="MissingTranslation">System</string>
     <string name="camera_init_message" tools:ignore="MissingTranslation">Starting the camera. The first launch can take a few seconds.</string>
     <string name="camera_bind_failed_title">Camera couldn\'t start</string>
     <!-- CameraPreviewBox: bind-failure detail under the title, above the Retry button -->

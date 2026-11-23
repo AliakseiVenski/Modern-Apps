@@ -83,6 +83,11 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     fontWeight = FontWeight.SemiBold,
                 )
 
+                Text(
+                    stringResource(R.string.settings_category_video).uppercase(),
+                    color = SectionColor, fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+                )
+
                 if (opts != null && opts.qualities.isNotEmpty()) {
                     val labels = videoQualityLabels()
                     PillRow(
@@ -134,6 +139,11 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     )
                 }
 
+                androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = Color.White.copy(alpha = 0.12f))
+                Text(
+                    stringResource(R.string.settings_category_system).uppercase(),
+                    color = SectionColor, fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+                )
                 ToggleCard(
                     title = stringResource(R.string.settings_debug_overlay),
                     subtitle = stringResource(R.string.settings_debug_overlay_short),

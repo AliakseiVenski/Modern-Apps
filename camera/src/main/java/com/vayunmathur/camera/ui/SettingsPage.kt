@@ -149,23 +149,7 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            SaveLocationSection(
-                saveTarget = saveTarget,
-                onChooseFolder = {
-                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                        addFlags(
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
-                        )
-                    }
-                    runCatching { folderPicker.launch(intent) }
-                        .onFailure {
-                            messenger.show(saveLocationError)
-                        }
-                },
-                onReset = { viewModel.clearSaveTreeUri() },
-            )
+            SettingsCategoryHeader(stringResource(R.string.settings_category_video), first = true)
             CameraCodecSettings(
                 videoCodec = videoCodec,
                 audioInputDevice = effectiveAudioDevice,
@@ -174,16 +158,8 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onAudioInputDeviceChange = { viewModel.setAudioInputDevice(it); noteIfDeferred() },
             )
             VideoTuningSettings(viewModel)
-            RememberModeSetting(viewModel)
 
-            SettingsSection(title = stringResource(R.string.settings_mirror_front)) {
-                SettingsSwitchRow(
-                    title = stringResource(R.string.settings_mirror_front_description),
-                    checked = mirrorFront,
-                    onCheckedChange = { viewModel.setMirrorFront(it); noteIfDeferred() },
-                )
-            }
-
+            SettingsCategoryHeader(stringResource(R.string.settings_category_photo))
             CameraPhotoFormatSettings(
                 photoFormat = photoFormat,
                 onPhotoFormatChange = { viewModel.setPhotoFormat(it); noteIfDeferred() },
@@ -204,9 +180,36 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onMotionDurationChange = { viewModel.setMotionPhotoDuration(it) },
             )
 
+            SettingsCategoryHeader(stringResource(R.string.settings_category_common))
+            RememberModeSetting(viewModel)
             CustomZoomSettings(viewModel)
-            DebugOverlaySetting(viewModel)
 
+            SettingsSection(title = stringResource(R.string.settings_mirror_front)) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_mirror_front_description),
+                    checked = mirrorFront,
+                    onCheckedChange = { viewModel.setMirrorFront(it); noteIfDeferred() },
+                )
+            }
+
+            SettingsCategoryHeader(stringResource(R.string.settings_category_system))
+            SaveLocationSection(
+                saveTarget = saveTarget,
+                onChooseFolder = {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                        addFlags(
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+                        )
+                    }
+                    runCatching { folderPicker.launch(intent) }
+                        .onFailure {
+                            messenger.show(saveLocationError)
+                        }
+                },
+                onReset = { viewModel.clearSaveTreeUri() },
+            )
             SettingsSection(title = stringResource(R.string.settings_location)) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.settings_location_description),
@@ -220,6 +223,7 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                     },
                 )
             }
+            DebugOverlaySetting(viewModel)
         }
     }
 }
