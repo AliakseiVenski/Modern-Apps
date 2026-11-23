@@ -55,9 +55,13 @@ internal class Camera2PreviewSession(
     @Volatile
     var rebuildHandler: (() -> Unit)? = null
 
+    /** Invoked (on the session executor) when a session delivers its first frame. */
+    @Volatile
+    var onStreamingStarted: (() -> Unit)? = null
+
     /** Output-profile rung; advances only on pre-streaming failures. */
     @Volatile
-    private var profileIndex = 0
+    private var profileIndex = if (hdrPreview) 0 else savedProfile()
 
     /** True once the current session has streamed a frame (failures after this are real errors). */
     @Volatile
@@ -189,6 +193,8 @@ internal class Camera2PreviewSession(
             listener = object : Camera2Session.Listener {
                 override fun onStreaming(previewSize: com.vayunmathur.camera.platform.camera2.FrameSize) {
                     streamed = true
+                    if (!hdrPreview) saveProfile(profileIndex)
+                    onStreamingStarted?.invoke()
                     Log.status(
                         "Camera2Preview",
                         "streaming after ${android.os.SystemClock.elapsedRealtime() - createdAtMs} ms " +
@@ -265,6 +271,21 @@ internal class Camera2PreviewSession(
         return built
     }
 
+    private val profilePrefs get() = context.getSharedPreferences("camera2_preview_profile", Context.MODE_PRIVATE)
+
+    // Keyed on the install time so an app update re-probes the richer profiles.
+    private val profileKey: String
+        get() {
+            val updated = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }
+                .getOrDefault(0L)
+            return "${lensFacing?.name}_$updated"
+        }
+
+    /** Profile that streamed last time on this lens, so a HAL that rejects the richer ones is not probed every launch. */
+    private fun savedProfile(): Int = profilePrefs.getInt(profileKey, 0).coerceIn(0, MAX_PROFILE_INDEX)
+
+    private fun saveProfile(index: Int) = profilePrefs.edit().putInt(profileKey, index).apply()
+
     /** Delivers a recorded init failure to onError, at most once. */
     fun deliverPendingError() {
         val message = pendingInitError ?: return
@@ -287,6 +308,6 @@ internal class Camera2PreviewSession(
         /** Last degrade rung (preview + JPEG only). */
         const val MAX_PROFILE_INDEX = 3
         const val RETRY_DELAY_MS = 500L
-        const val DEGRADE_DELAY_MS = 4000L
+        const val DEGRADE_DELAY_MS = 1000L
     }
 }

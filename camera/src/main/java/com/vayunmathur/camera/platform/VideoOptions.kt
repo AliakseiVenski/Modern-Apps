@@ -91,12 +91,19 @@ suspend fun CameraViewModel.refreshVideoOptions() {
     } ?: return
 }
 
-/** ISO values offered as a cap: the usual stops inside the sensor's range, plus its maximum. */
+/** Highest ISO the lens can reach: the sensor range plus the post-raw digital boost when the HAL has one. */
+internal fun LensCharacteristicsSnapshot.maxEffectiveIso(): Int {
+    val sensorMax = sensitivityRange?.upper ?: return 0
+    return com.vayunmathur.camera.domain.IsoSplit.maxIso(sensorMax, postRawBoostRange?.upper ?: 100)
+}
+
+/** ISO values offered as a cap: the usual stops inside the reachable range, plus its maximum. */
 internal fun isoLimitStops(snapshot: LensCharacteristicsSnapshot): List<Int> {
     val range = snapshot.sensitivityRange ?: return emptyList()
-    return listOf(100, 200, 400, 800, 1600, 3200, 6400, 12800)
-        .filter { it >= range.lower && it < range.upper }
-        .plus(range.upper)
+    val max = snapshot.maxEffectiveIso()
+    return listOf(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600)
+        .filter { it >= range.lower && it < max }
+        .plus(max)
 }
 
 /** The mime and the AV1/HEVC flags for [codec], falling back to AVC when the device lacks the encoder. */
@@ -188,7 +195,7 @@ internal fun CameraViewModel.planVideo(
                 .firstOrNull { tierFits(cameraId, snapshot, mime, it, rate) }?.let { rate to it }
         }
     }
-    val maxIso = snapshot?.sensitivityRange?.upper ?: 0
+    val maxIso = snapshot?.maxEffectiveIso() ?: 0
     return VideoPlan(
         fps = choice?.first ?: VideoFpsPolicy.STANDARD,
         tier = choice?.second ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD,

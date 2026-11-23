@@ -73,6 +73,9 @@ data class CustomRecordingConfig(
     val isoLimit: Int = 0,
     /** Lowest ISO of the lens, the floor of the ISO cap controller. */
     val isoMin: Int = 50,
+    /** Sensor ISO ceiling and post-raw boost ceiling (100 = 1x): ISO above the first goes out as digital boost. */
+    val isoSensorMax: Int = Int.MAX_VALUE,
+    val isoBoostMax: Int = 100,
 )
 
 /** Read-back summary of a finished file (see [Camera2VideoRecordingEngine.validateOutput]). */
@@ -423,7 +426,11 @@ class Camera2VideoRecordingEngine(
     private fun applyExposure(builder: CaptureRequest.Builder, setting: ExposureSetting) {
         builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, setting.timeNanos)
-        builder.set(CaptureRequest.SENSOR_SENSITIVITY, setting.iso)
+        val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(setting.iso, config.isoSensorMax, config.isoBoostMax)
+        builder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorIso)
+        if (boost > com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST) {
+            builder.set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, boost)
+        }
         builder.set(CaptureRequest.SENSOR_FRAME_DURATION, NANOS_PER_SECOND / config.captureFps)
     }
 

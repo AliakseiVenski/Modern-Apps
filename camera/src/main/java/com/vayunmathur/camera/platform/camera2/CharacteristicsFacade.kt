@@ -101,6 +101,8 @@ data class LensCharacteristicsSnapshot(
     val hasFlashUnit: Boolean,
     val exposureTimeRangeNs: Range<Long>?,
     val sensitivityRange: Range<Int>?,
+    /** CONTROL_POST_RAW_SENSITIVITY_BOOST range (100 = 1x): digital gain beyond the sensor ISO; null when absent. */
+    val postRawBoostRange: Range<Int>? = null,
     /** Exposure-compensation range converted to EV steps; null when unreadable. */
     val exposureCompensationEvRange: Range<Float>?,
     val videoStabilizationModes: List<Int>,
@@ -298,6 +300,7 @@ class CharacteristicsFacade private constructor(
             hasFlashUnit: Boolean = false,
             exposureTimeRangeNs: Range<Long>? = null,
             sensitivityRange: Range<Int>? = null,
+            postRawBoostRange: Range<Int>? = null,
             exposureCompensationEvRange: Range<Float>? = null,
             videoStabilizationModes: List<Int> = emptyList(),
             opticalStabilizationModes: List<Int> = emptyList(),
@@ -341,6 +344,7 @@ class CharacteristicsFacade private constructor(
                 hasFlashUnit = hasFlashUnit,
                 exposureTimeRangeNs = exposureTimeRangeNs,
                 sensitivityRange = sensitivityRange,
+                postRawBoostRange = postRawBoostRange,
                 exposureCompensationEvRange = exposureCompensationEvRange,
                 videoStabilizationModes = videoStabilizationModes,
                 opticalStabilizationModes = opticalStabilizationModes,
@@ -436,6 +440,7 @@ class CharacteristicsFacade private constructor(
                     hasFlashUnit = get(CameraCharacteristics.FLASH_INFO_AVAILABLE) ?: false,
                     exposureTimeRangeNs = get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE),
                     sensitivityRange = get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE),
+                    postRawBoostRange = get(CameraCharacteristics.CONTROL_POST_RAW_SENSITIVITY_BOOST_RANGE),
                     exposureCompensationEvRange = evRange,
                     videoStabilizationModes =
                         get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)?.toList().orEmpty(),

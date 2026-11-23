@@ -218,7 +218,7 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
 
     // Motion Photo on/off. Default on preserves the pre-toggle behaviour:
     // eligible plain stills diverted to Motion Photo with no explicit opt-in.
-    internal val motionPhotoEnabledMutable = MutableStateFlow(true)
+    internal val motionPhotoEnabledMutable = MutableStateFlow(false)
     val motionPhotoEnabled = motionPhotoEnabledMutable.asStateFlow()
 
     internal val audioInputDeviceMutable =

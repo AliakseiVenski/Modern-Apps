@@ -78,6 +78,7 @@ data class ResolvedRequestParams(
     val opticalStabilization: Boolean = false,
     val isoCapTimeNs: Long? = null,
     val isoCapIso: Int? = null,
+    val isoCapBoost: Int? = null,
 )
 
 object Camera2Controls {
@@ -104,6 +105,13 @@ object Camera2Controls {
             CameraMetadata.FLASH_MODE_TORCH
         } else {
             CameraMetadata.FLASH_MODE_OFF
+        }
+        val isoCap = state.isoCapIso?.let {
+            com.vayunmathur.camera.domain.IsoSplit.split(
+                it,
+                snapshot.sensitivityRange?.upper ?: it,
+                snapshot.postRawBoostRange?.upper ?: com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST,
+            )
         }
         return ResolvedRequestParams(
             zoomRatio = if (supportsZoomRatio) zoom else null,
@@ -160,7 +168,8 @@ object Camera2Controls {
             videoStabilizationMode = state.videoStabilizationMode,
             opticalStabilization = state.opticalStabilization,
             isoCapTimeNs = state.isoCapTimeNs,
-            isoCapIso = state.isoCapIso,
+            isoCapIso = isoCap?.first,
+            isoCapBoost = isoCap?.second,
         )
     }
 

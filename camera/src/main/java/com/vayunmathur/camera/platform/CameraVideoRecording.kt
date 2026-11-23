@@ -187,6 +187,8 @@ internal fun CameraViewModel.startRecording() {
         hdr = plan.hdr,
         isoLimit = plan.isoLimit,
         isoMin = cameraSnapshot0?.second?.sensitivityRange?.lower ?: 50,
+        isoSensorMax = cameraSnapshot0?.second?.sensitivityRange?.upper ?: Int.MAX_VALUE,
+        isoBoostMax = cameraSnapshot0?.second?.postRawBoostRange?.upper ?: 100,
     )
     debug.reset()
     debug.bind.value = VideoBindSummary(

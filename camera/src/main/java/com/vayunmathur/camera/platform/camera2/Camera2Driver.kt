@@ -242,6 +242,7 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
         set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         set(CaptureRequest.SENSOR_EXPOSURE_TIME, params.isoCapTimeNs)
         set(CaptureRequest.SENSOR_SENSITIVITY, params.isoCapIso)
+        params.isoCapBoost?.takeIf { it > 100 }?.let { set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, it) }
         set(CaptureRequest.SENSOR_FRAME_DURATION, 1_000_000_000L / (params.videoFps ?: 30))
     } else {
         set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
