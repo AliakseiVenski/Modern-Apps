@@ -58,6 +58,7 @@ private fun CameraViewModel.loadCaptureSettings() {
         quality = ds.getString("camera_video_quality")?.takeIf { it.isNotBlank() },
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: false,
         isoLimit = ds.getString("camera_video_iso_limit")?.toIntOrNull() ?: 0,
+        bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
     )
     ds.getString("camera_custom_zoom_levels")?.let { raw ->
         customZoomLevelsMutable.value = raw.split(",")
@@ -219,6 +220,12 @@ fun CameraViewModel.setVideoIsoLimit(iso: Int) {
     videoTuningMutable.update { it.copy(isoLimit = iso) }
     applyVideoPreviewParams()
     viewModelScope.launch { ds.setString("camera_video_iso_limit", iso.toString()) }
+}
+
+/** Pins the video bitrate in Mbps; 0 = automatic. Read when a recording starts. */
+fun CameraViewModel.setVideoBitrateMbps(mbps: Int) {
+    videoTuningMutable.update { it.copy(bitrateMbps = mbps) }
+    viewModelScope.launch { ds.setString("camera_video_bitrate_mbps", mbps.toString()) }
 }
 
 fun CameraViewModel.setVideoStabilizationEnabled(enabled: Boolean) {

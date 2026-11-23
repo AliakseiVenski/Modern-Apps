@@ -210,6 +210,9 @@
     <string name="night_2">Night %1$s%%</string>
 
     <!-- CameraPreviewBox: session bind failed after retries, shown over the black preview -->
+    <string name="settings_video_bitrate" tools:ignore="MissingTranslation">Video bitrate</string>
+    <string name="settings_video_bitrate_auto" tools:ignore="MissingTranslation">Automatic bitrate</string>
+    <string name="settings_video_bitrate_value" tools:ignore="MissingTranslation">%1$d Mbps</string>
     <string name="settings_category_video" tools:ignore="MissingTranslation">Video</string>
     <string name="settings_category_photo" tools:ignore="MissingTranslation">Photo</string>
     <string name="settings_category_common" tools:ignore="MissingTranslation">Photo and video</string>

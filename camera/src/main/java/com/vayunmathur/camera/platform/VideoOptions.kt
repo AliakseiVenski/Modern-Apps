@@ -19,7 +19,8 @@ import kotlinx.coroutines.withContext
  * automatic (60 when the lens and encoder allow it, else 30); [quality] is a
  * [com.vayunmathur.camera.domain.VideoQualityTier] name (null = best that works);
  * [stabilizationEnabled] asks for EIS on top of OIS where available; [hdr] records 10-bit HLG;
- * [isoLimit] caps the ISO the camera may use (0 = no cap).
+ * [isoLimit] caps the ISO the camera may use (0 = no cap); [bitrateMbps] pins the encoder bitrate
+ * (0 = automatic, which adapts to motion, storage and heat).
  */
 data class VideoTuning(
     val fps: Int = 0,
@@ -27,6 +28,7 @@ data class VideoTuning(
     val quality: String? = null,
     val hdr: Boolean = false,
     val isoLimit: Int = 0,
+    val bitrateMbps: Int = 0,
 )
 
 /** What the selected lens reports it can record. */
@@ -36,7 +38,46 @@ data class VideoOptions(
     val qualities: List<String>,
     val hdrSupported: Boolean,
     val isoStops: List<Int>,
-)
+    /** What the encoder for the chosen codec accepts, in Mbps (null = unknown, no slider). */
+    val encoderBitrateMbps: IntRange?,
+) {
+    /** Slider range for the chosen resolution (null = auto resolves to the best one). */
+    fun bitrateRangeMbps(qualityPref: String?): IntRange? = encoderBitrateMbps?.let { range ->
+        val tier = qualityPref?.takeIf { it in qualities } ?: qualities.firstOrNull()
+        val high = minOf(range.last, bitrateCapMbps(tier))
+        if (high > range.first) range.first..high else null
+    }
+}
+
+private const val MBPS = 1_000_000
+private const val MIN_BITRATE_MBPS = 2
+private const val MAX_BITRATE_MBPS = 200
+private const val UHD_BITRATE_CAP_MBPS = 100
+private const val LOWER_BITRATE_CAP_MBPS = 30
+
+/** The target phone's encoder stalls above ~21 Mbps at 1080p, so lower resolutions stop at 30 and UHD at 100. */
+internal fun bitrateCapMbps(tierName: String?): Int =
+    if (tierName == "UHD") UHD_BITRATE_CAP_MBPS else LOWER_BITRATE_CAP_MBPS
+
+/** The user's pinned bitrate for [tier] in bits per second, clamped to that resolution's cap; null = automatic. */
+internal fun CameraViewModel.customBitrateBps(tier: com.vayunmathur.camera.domain.VideoQualityTier): Int? {
+    val mbps = videoTuningMutable.value.bitrateMbps
+    return if (mbps > 0) minOf(mbps, bitrateCapMbps(tier.name)) * MBPS else null
+}
+
+private fun encoderBitrateRangeMbps(mime: String): IntRange? = try {
+    android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos
+        .filter { info -> info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) } }
+        .firstNotNullOfOrNull { it.getCapabilitiesForType(mime).videoCapabilities?.bitrateRange }
+        ?.let { range ->
+            val low = maxOf(MIN_BITRATE_MBPS, range.lower / MBPS)
+            val high = minOf(MAX_BITRATE_MBPS, range.upper / MBPS)
+            if (high > low) low..high else null
+        }
+} catch (e: IllegalArgumentException) {
+    Log.status("VideoOptions", "Could not query encoder bitrate range", e)
+    null
+}
 
 /** Resolutions offered in the picker, best first (480p is never useful next to 720p). */
 internal val OFFERED_TIERS = listOf(
@@ -89,6 +130,7 @@ suspend fun CameraViewModel.refreshVideoOptions() {
                 .map { it.name },
             hdrSupported = hdrSupported(cameraId),
             isoStops = isoLimitStops(snapshot),
+            encoderBitrateMbps = encoderBitrateRangeMbps(mime),
         )
     } ?: return
 }

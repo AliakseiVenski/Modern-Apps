@@ -30,6 +30,16 @@ class LiveBitrateControllerTest {
     }
 
     @Test
+    fun aPinnedBitrateNeverMoves() {
+        val d = decision(motion = SceneMotion.STATIC).copy(bitrateBps = 20_000_000)
+        val c = LiveBitrateController(d, 2_000L, fixed = true)
+        assertEquals(20_000_000, c.currentBitrateBps)
+        assertNull(drive(c, SceneMotion.STATIC, 0L))
+        assertNull(drive(c, SceneMotion.HIGH_MOTION, 10_000L))
+        assertEquals(20_000_000, c.currentBitrateBps)
+    }
+
+    @Test
     fun startsAtThePreRecordingDecision() {
         val d = decision(motion = SceneMotion.STATIC)
         assertEquals(26_400_000, controller(d).currentBitrateBps)

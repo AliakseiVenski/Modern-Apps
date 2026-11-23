@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -15,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.R
+import com.vayunmathur.camera.data.setVideoBitrateMbps
 import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoIsoLimit
@@ -30,7 +32,11 @@ import com.vayunmathur.library.ui.OutlinedButton
 import com.vayunmathur.library.ui.SelectableDropdownMenuItem
 import com.vayunmathur.library.ui.SettingsSection
 import com.vayunmathur.library.ui.SettingsSwitchRow
+import com.vayunmathur.library.ui.Slider
 import com.vayunmathur.library.ui.Text
+import kotlin.math.roundToInt
+
+private const val DEFAULT_CUSTOM_BITRATE_MBPS = 40
 
 /**
  * Video frame rate and stabilization, limited to what the lens a recording would use reports.
@@ -62,6 +68,36 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
                 selected = tuning.fps,
                 onSelect = { viewModel.setVideoFps(it) },
             )
+        }
+    }
+
+    opts.bitrateRangeMbps(tuning.quality)?.let { range ->
+        SettingsSection(title = stringResource(R.string.settings_video_bitrate)) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_video_bitrate_auto),
+                checked = tuning.bitrateMbps == 0,
+                onCheckedChange = { isAuto ->
+                    viewModel.setVideoBitrateMbps(
+                        if (isAuto) 0 else DEFAULT_CUSTOM_BITRATE_MBPS.coerceIn(range.first, range.last),
+                    )
+                },
+            )
+            if (tuning.bitrateMbps > 0) {
+                var value by remember(tuning.bitrateMbps, range) {
+                    mutableFloatStateOf(tuning.bitrateMbps.coerceIn(range.first, range.last).toFloat())
+                }
+                Text(
+                    stringResource(R.string.settings_video_bitrate_value, value.roundToInt()),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = range.first.toFloat()..range.last.toFloat(),
+                    onValueChangeFinished = { viewModel.setVideoBitrateMbps(value.roundToInt()) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
     }
 

@@ -22,6 +22,8 @@ import kotlin.math.roundToInt
 class LiveBitrateController(
     private val decision: AdaptiveBitrateDecision,
     private val evaluateIntervalMs: Long = DEFAULT_EVALUATE_INTERVAL_MS,
+    /** A bitrate the user pinned: it never moves with motion, storage or heat. */
+    private val fixed: Boolean = false,
 ) {
     /** Bitrate the encoder should be at now (starts at the pre-record decision). */
     var currentBitrateBps: Int = decision.bitrateBps
@@ -58,6 +60,7 @@ class LiveBitrateController(
      * Returns the new target bitrate to apply to the encoder, or null to hold.
      */
     fun evaluate(motion: SceneMotion?, nowMs: Long): Int? {
+        if (fixed) return null
         val candidate = candidateFor(motion)
         if (candidate == pendingCandidateBps) {
             pendingWins++

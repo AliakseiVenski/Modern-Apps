@@ -55,9 +55,9 @@ internal fun CameraViewModel.prepareRecorder(plan: RecorderPlan): Surface? {
             existing.core.release()
             state.prepared = null
         }
-        val decision = computeAdaptiveBitrateDecision(
+        val initialBps = customBitrateBps(plan.tier) ?: computeAdaptiveBitrateDecision(
             plan.tier, useAv1 = plan.useAv1, useHevc = plan.useHevc, fps = plan.fps,
-        )
+        ).bitrateBps
         val core = Camera2RecordingCore(
             config = CustomRecordingConfig(
                 width = plan.tier.width,
@@ -66,7 +66,7 @@ internal fun CameraViewModel.prepareRecorder(plan: RecorderPlan): Surface? {
                 videoMime = plan.mime,
                 hdr = plan.hdr,
             ),
-            initialBitrateBps = { decision.bitrateBps },
+            initialBitrateBps = { initialBps },
             ownership = RecordingSessionOwnership.EXTERNALLY_OWNED,
             audioInputDevices = { AudioInputDevices.enumerateInfos(app) },
         )

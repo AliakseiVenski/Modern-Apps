@@ -142,7 +142,14 @@ internal fun CameraViewModel.startRecording() {
     boundVideoQualityTier = tier
     videoFpsTarget = fps
 
-    val decision = computeAdaptiveBitrateDecision(tier, useAv1 = useAv1, useHevc = useHevc, fps = fps)
+    val adaptive = computeAdaptiveBitrateDecision(tier, useAv1 = useAv1, useHevc = useHevc, fps = fps)
+    // A bitrate pinned in Settings replaces the adaptive one: no motion/storage/heat steering.
+    val pinnedBps = customBitrateBps(tier)
+    val decision = if (pinnedBps != null) {
+        adaptive.copy(bitrateBps = pinnedBps, motion = null, reductions = emptySet(), boosted = false)
+    } else {
+        adaptive
+    }
     boundVideoBitrateBps = decision.bitrateBps
     if (decision.forcedReduction) {
         // The one user-visible adaptive note, and only for a forced cut:
@@ -216,7 +223,7 @@ internal fun CameraViewModel.startRecording() {
             (if (plan.hdr) "  HLG" else "") +
             (if (plan.isoLimit > 0 && !plan.hdr) "  ISO<=${plan.isoLimit}" else ""),
     )
-    val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision)
+    val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision, fixed = pinnedBps != null)
     val recorderPlan = plan.toRecorderPlan()
     val liveSession = activeCamera2Session
     if (liveSession != null && sessionRecordingReady(recorderPlan)) {
