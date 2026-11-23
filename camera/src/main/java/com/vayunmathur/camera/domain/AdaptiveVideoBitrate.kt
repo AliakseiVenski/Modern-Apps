@@ -23,7 +23,13 @@ enum class VideoQualityTier(val baseBitrateBps: Int, val width: Int, val height:
         HD -> SD
         SD -> SD
     }
+
+    /** Bitrate of this rung at [fps]: the ladder is sized at 30 fps, faster capture needs more bits. */
+    fun bitrateFor(fps: Int): Int = (baseBitrateBps * fpsBitrateScale(fps)).roundToInt()
 }
+
+/** Bitrate multiplier for [fps] against the 30 fps ladder: 1.0 up to 30, +50% at 60, linear between. */
+fun fpsBitrateScale(fps: Int): Double = 1.0 + 0.5 * ((fps - 30) / 30.0).coerceAtLeast(0.0)
 
 /** Thermal pressure as the policy needs it; the platform maps PowerManager onto this. */
 enum class ThermalPressure { NORMAL, SEVERE, UNKNOWN }
@@ -48,6 +54,7 @@ data class AdaptiveBitrateInput(
     val freeStorageBytes: Long?,
     val thermal: ThermalPressure,
     val boostAllowed: Boolean,
+    val fps: Int = 30,
 )
 
 /**
@@ -64,10 +71,11 @@ data class AdaptiveBitrateDecision(
     val motion: SceneMotion?,
     val reductions: Set<AdaptiveReduction>,
     val boosted: Boolean,
+    val fps: Int = 30,
 ) {
     /** True when storage/thermal actually lowered the bitrate below the base rung. */
     val forcedReduction: Boolean
-        get() = reductions.isNotEmpty() && bitrateBps < baseTier.baseBitrateBps
+        get() = reductions.isNotEmpty() && bitrateBps < baseTier.bitrateFor(fps)
 }
 
 /**
@@ -114,8 +122,9 @@ object AdaptiveVideoBitratePolicy {
             input.motion == SceneMotion.MODERATE -> MODERATE_FACTOR
             else -> HIGH_MOTION_FACTOR // HIGH_MOTION, or unknown: rung as-is
         }
-        val floor = (tier.baseBitrateBps * QUALITY_FLOOR_FRACTION).roundToInt()
-        val bitrate = maxOf((tier.baseBitrateBps * factor).roundToInt(), floor)
+        val rungBps = tier.bitrateFor(input.fps)
+        val floor = (rungBps * QUALITY_FLOOR_FRACTION).roundToInt()
+        val bitrate = maxOf((rungBps * factor).roundToInt(), floor)
         return AdaptiveBitrateDecision(
             bitrateBps = bitrate,
             baseTier = input.baseTier,
@@ -123,6 +132,7 @@ object AdaptiveVideoBitratePolicy {
             motion = input.motion,
             reductions = reductions,
             boosted = boosted,
+            fps = input.fps,
         )
     }
 }

@@ -14,6 +14,7 @@ internal fun CameraModesPane(
     iconRotation: Float,
     onPickerChanged: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
+    onVideoQuickMenu: (() -> Unit)? = null,
 ) {
     ModeSelector(
         cameraMode = cameraMode,
@@ -29,5 +30,7 @@ internal fun CameraModesPane(
         onPickerChanged = onPickerChanged,
         onSettingsClick = onSettingsClick,
         videoPickerEnabled = videoPickerEnabled,
+        isVideoType = !isPhotoType,
+        onVideoQuickMenu = onVideoQuickMenu,
     )
 }

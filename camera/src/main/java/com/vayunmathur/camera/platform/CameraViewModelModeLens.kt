@@ -1,5 +1,6 @@
 package com.vayunmathur.camera.platform
 
+import com.vayunmathur.camera.data.saveLastMode
 
 /**
  * Mode and lens actions for [CameraViewModel]: mode switches, lens flip
@@ -40,6 +41,7 @@ fun CameraViewModel.switchCameraMode(newMode: CameraMode) {
         }
     }
     cameraModeMutable.value = newMode
+    if (!captureForResult) saveLastMode(newMode)
 }
 
 fun CameraViewModel.flipCamera() {

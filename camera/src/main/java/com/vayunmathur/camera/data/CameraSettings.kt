@@ -6,8 +6,12 @@ import android.net.Uri
 import com.vayunmathur.library.log.Log
 import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.vayunmathur.camera.platform.AspectRatioOption
+import com.vayunmathur.camera.platform.CameraMode
+import com.vayunmathur.camera.platform.VideoTuning
+import com.vayunmathur.camera.platform.refreshZoomLevels
 import com.vayunmathur.camera.platform.camera2.AudioInputDeviceSelection
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.CodecSupport
@@ -46,6 +50,22 @@ private fun CameraViewModel.loadCaptureSettings() {
     }
     ds.getString("camera_photo_format")?.let {
         runCatching { photoFormatMutable.value = PhotoFormat.valueOf(it) }
+    }
+    videoTuningMutable.value = VideoTuning(
+        fps = ds.getString("camera_video_fps")?.toIntOrNull() ?: 0,
+        stabilizationEnabled = ds.getString("camera_video_stabilization")?.toBoolean() ?: true,
+    )
+    ds.getString("camera_custom_zoom_levels")?.let { raw ->
+        customZoomLevelsMutable.value = raw.split(",")
+            .mapNotNull { it.trim().toFloatOrNull() }
+            .filter { it > 0f }
+            .distinct()
+            .sorted()
+    }
+    debug.enabled.value = ds.getString("camera_debug_overlay")?.toBoolean() ?: false
+    rememberModeMutable.value = ds.getString("camera_remember_mode")?.toBoolean() ?: false
+    if (rememberModeMutable.value) {
+        ds.getString("camera_last_mode")?.let { runCatching { cameraModeMutable.value = CameraMode.valueOf(it) } }
     }
     ds.getString("camera_motion_duration")?.let {
         runCatching { motionPhotoDurationMutable.value = MotionPhotoDuration.valueOf(it) }
@@ -168,6 +188,41 @@ fun CameraViewModel.setMotionPhotoEnabled(enabled: Boolean) {
     motionPhotoEnabledMutable.value = enabled
     if (!enabled) clearMotionFrames()
     viewModelScope.launch { ds.setString("camera_motion_photo_enabled", enabled.toString()) }
+}
+
+fun CameraViewModel.setVideoFps(fps: Int) {
+    videoTuningMutable.update { it.copy(fps = fps) }
+    viewModelScope.launch { ds.setString("camera_video_fps", fps.toString()) }
+}
+
+fun CameraViewModel.setVideoStabilizationEnabled(enabled: Boolean) {
+    videoTuningMutable.update { it.copy(stabilizationEnabled = enabled) }
+    viewModelScope.launch { ds.setString("camera_video_stabilization", enabled.toString()) }
+}
+
+/**
+ * User-configurable zoom stops as zoom ratios relative to the 1x lens (e.g. 0.5, 1, 3, 5).
+ * Empty = automatic stops. Persisted so the pills match the lenses this device really has.
+ */
+fun CameraViewModel.setCustomZoomLevels(levels: List<Float>) {
+    val cleaned = levels.filter { it > 0f }.distinct().sorted()
+    customZoomLevelsMutable.value = cleaned
+    refreshZoomLevels()
+    viewModelScope.launch { ds.setString("camera_custom_zoom_levels", cleaned.joinToString(",")) }
+}
+
+fun CameraViewModel.setDebugOverlay(enabled: Boolean) {
+    debug.enabled.value = enabled
+    viewModelScope.launch { ds.setString("camera_debug_overlay", enabled.toString()) }
+}
+
+fun CameraViewModel.setRememberMode(enabled: Boolean) {
+    rememberModeMutable.value = enabled
+    viewModelScope.launch { ds.setString("camera_remember_mode", enabled.toString()) }
+}
+
+internal fun CameraViewModel.saveLastMode(mode: CameraMode) {
+    viewModelScope.launch { ds.setString("camera_last_mode", mode.name) }
 }
 
 /** Motion-Photo clip length (issue #712); applies to the next capture's ring buffer. */

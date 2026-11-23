@@ -36,6 +36,10 @@ enum class LensType {
  * @param intrinsicZoomRatio `CameraInfo.getIntrinsicZoomRatio()` when the
  *   CameraX implementation knows it (logical multi-camera); null /
  *   `INTRINSIC_ZOOM_RATIO_UNKNOWN` otherwise. Refines the label math.
+ * @param physicalBacking IDs of the physical sensors this logical camera reads from,
+ *   when the HAL reports them (logical multi-camera). Digital zoom stops share the
+ *   same physical backing as their source lens, so dedupe collapses them into one
+ *   pill rather than surfacing each stop as a separate lens.
  * @param fallbackPriority lower wins when falling back within the same
  *   facing (wide/front default = 0).
  * @param labelKey stable key for the display label ("ultrawide", "wide",
@@ -48,6 +52,7 @@ data class PhysicalLens(
     val focalLengthMm35Eq: Float?,
     val nominalZoomRatio: Float,
     val intrinsicZoomRatio: Float? = null,
+    val physicalBacking: Set<String>? = null,
     val fallbackPriority: Int,
     val labelKey: String,
 )

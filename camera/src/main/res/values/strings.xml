@@ -83,6 +83,37 @@
     <!-- Video codec description: most efficient but may not be supported everywhere -->
     <string name="codec_av1_description">Most efficient</string>
 
+    <!-- Video frame rate and stabilization (SettingsPage and the viewfinder quick panel) -->
+    <!-- SettingsPage: section header for the recording frame rate -->
+    <string name="settings_video_fps" tools:ignore="MissingTranslation">Video frame rate</string>
+    <!-- Option meaning the camera picks the value itself (60 fps when possible, else 30) -->
+    <string name="settings_video_auto" tools:ignore="MissingTranslation">Auto</string>
+    <!-- Frame rate option. %1$d = frames per second -->
+    <string name="settings_video_fps_value" translatable="false">%1$d fps</string>
+    <!-- SettingsPage: video stabilization switch title -->
+    <string name="settings_video_stabilization" tools:ignore="MissingTranslation">Video stabilization</string>
+    <!-- SettingsPage: video stabilization switch summary -->
+    <string name="settings_video_stabilization_description" tools:ignore="MissingTranslation">Software EIS stabilization on top of the lens optical OIS where available; turn off to record raw unstabilized</string>
+    <!-- Quick panel: subtitle under the stabilization switch -->
+    <string name="settings_video_stabilization_short" tools:ignore="MissingTranslation">EIS on top of OIS where available</string>
+    <!-- Viewfinder quick panel: title -->
+    <string name="quick_menu_title" tools:ignore="MissingTranslation">Video</string>
+
+    <!-- Debug overlay (SettingsPage and the quick panel) -->
+    <string name="settings_debug_overlay" tools:ignore="MissingTranslation">Debug overlay</string>
+    <string name="settings_debug_overlay_description" tools:ignore="MissingTranslation">Show live fps, ISO, shutter and encoder info on the viewfinder</string>
+    <string name="settings_debug_overlay_short" tools:ignore="MissingTranslation">Live fps, ISO, shutter and encoder</string>
+
+    <!-- SettingsPage: reopen in the last used mode -->
+    <string name="settings_remember_mode" tools:ignore="MissingTranslation">Last used mode</string>
+    <string name="settings_remember_mode_description" tools:ignore="MissingTranslation">Open the camera in the mode you used last (video, portrait, and so on)</string>
+
+    <!-- SettingsPage: user-configurable zoom stops -->
+    <string name="settings_custom_zoom_levels" tools:ignore="MissingTranslation">Zoom stops</string>
+    <string name="settings_custom_zoom_levels_description" tools:ignore="MissingTranslation">Zoom ratios shown as pills, relative to the 1x lens (for example 0.5, 1, 3, 5). Leave empty for automatic stops; stops the lens cannot reach are hidden.</string>
+    <string name="settings_custom_zoom_add" tools:ignore="MissingTranslation">Zoom ratio</string>
+    <string name="settings_custom_zoom_add_button" tools:ignore="MissingTranslation">Add zoom stop</string>
+
     <!-- Photo format settings (SettingsPage) -->
     <string name="settings_photo_format">Photo format</string>
     <string name="photo_format_jpeg_label">JPEG</string>

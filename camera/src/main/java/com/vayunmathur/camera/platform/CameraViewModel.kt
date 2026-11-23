@@ -252,6 +252,30 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     internal val availableZoomLevelsMutable = MutableStateFlow(listOf("1x" to 1f))
     val availableZoomLevels = availableZoomLevelsMutable.asStateFlow()
 
+    /**
+     * User-configured zoom stops (ratios relative to 1x), or empty to use the automatic stops.
+     * Editable in Settings so the pills match the device's real lenses.
+     */
+    internal val customZoomLevelsMutable = MutableStateFlow<List<Float>>(emptyList())
+    val customZoomLevels = customZoomLevelsMutable.asStateFlow()
+
+    /** Video fps and stabilization choices, read when a recording starts. */
+    internal val videoTuningMutable = MutableStateFlow(VideoTuning())
+    val videoTuning = videoTuningMutable.asStateFlow()
+
+    /** What the lens a recording would use reports it can do; filled by [refreshVideoOptions]. */
+    internal val videoOptionsMutable = MutableStateFlow<VideoOptions?>(null)
+    val videoOptions = videoOptionsMutable.asStateFlow()
+
+    /** Reopen in the mode last used instead of Photo. */
+    internal val rememberModeMutable = MutableStateFlow(false)
+    val rememberMode = rememberModeMutable.asStateFlow()
+
+    internal val debug = DebugOverlayState()
+
+    /** Fixed fps the current or last recording targets; shown in the debug overlay. */
+    @Volatile internal var videoFpsTarget: Int = 0
+
     // Whether the front-camera preview and saved selfie are horizontally mirrored (issue #632).
     // Default true preserves the long-standing mirror-like selfie behavior.
     internal val mirrorFrontMutable = MutableStateFlow(true)
@@ -495,6 +519,10 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     fun enableCaptureForResult(outputUri: Uri?) {
         captureForResult = true
         resultOutputUri = outputUri
+        // A restored video or panorama mode would never resolve the caller's intent.
+        if (cameraModeMutable.value != CameraMode.PHOTO && cameraModeMutable.value != CameraMode.PORTRAIT) {
+            cameraModeMutable.value = CameraMode.PHOTO
+        }
     }
 
     internal val panoramaEngine = PanoramaEngine(app)

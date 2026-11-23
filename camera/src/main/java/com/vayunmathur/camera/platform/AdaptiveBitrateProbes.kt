@@ -71,8 +71,9 @@ internal fun CameraViewModel.computeAdaptiveBitrateDecision(
     baseTier: VideoQualityTier,
     useAv1: Boolean,
     useHevc: Boolean,
+    fps: Int = VIDEO_BITRATE_PROBE_FPS,
 ): AdaptiveBitrateDecision {
-    val boostedBps = (baseTier.baseBitrateBps *
+    val boostedBps = (baseTier.bitrateFor(fps) *
         AdaptiveVideoBitratePolicy.HIGH_MOTION_BOOST_FACTOR).roundToInt()
     val mime = when {
         useAv1 -> MediaFormat.MIMETYPE_VIDEO_AV1
@@ -80,7 +81,7 @@ internal fun CameraViewModel.computeAdaptiveBitrateDecision(
         else -> MediaFormat.MIMETYPE_VIDEO_AVC
     }
     val boostAllowed = CodecSupport.supportsVideoBitrate(
-        mime, baseTier.width, baseTier.height, VIDEO_BITRATE_PROBE_FPS, boostedBps
+        mime, baseTier.width, baseTier.height, fps, boostedBps
     )
     val decision = AdaptiveVideoBitratePolicy.decide(
         AdaptiveBitrateInput(
@@ -89,6 +90,7 @@ internal fun CameraViewModel.computeAdaptiveBitrateDecision(
             freeStorageBytes = probeFreeStorageBytes(),
             thermal = probeThermalPressure(),
             boostAllowed = boostAllowed,
+            fps = fps,
         )
     )
     lastAdaptiveBitrateDecision = decision

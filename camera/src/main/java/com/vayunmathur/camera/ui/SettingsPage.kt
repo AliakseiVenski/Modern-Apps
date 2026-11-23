@@ -173,6 +173,8 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onVideoCodecChange = { viewModel.setVideoCodec(it); noteIfDeferred() },
                 onAudioInputDeviceChange = { viewModel.setAudioInputDevice(it); noteIfDeferred() },
             )
+            VideoTuningSettings(viewModel)
+            RememberModeSetting(viewModel)
 
             SettingsSection(title = stringResource(R.string.settings_mirror_front)) {
                 SettingsSwitchRow(
@@ -201,6 +203,9 @@ fun <T : NavKey> SettingsPage(backStack: NavBackStack<T>, viewModel: CameraViewM
                 onMotionPhotoEnabledChange = { viewModel.setMotionPhotoEnabled(it) },
                 onMotionDurationChange = { viewModel.setMotionPhotoDuration(it) },
             )
+
+            CustomZoomSettings(viewModel)
+            DebugOverlaySetting(viewModel)
 
             SettingsSection(title = stringResource(R.string.settings_location)) {
                 SettingsSwitchRow(

@@ -47,6 +47,9 @@ import kotlinx.coroutines.withContext
 internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
     activeCamera2Session = session
     if (session != null) {
+        session.previewFrameObserver = { raw ->
+            debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
+        }
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }
     }
 }

@@ -73,6 +73,21 @@ private const val ADAPTIVE_REBIND_SETTLE_MS = 40L
 /** Settle pause for the preview session to release the camera before the engine opens it. */
 private const val RECORDING_SETTLE_MS = 350L
 
+private const val BITS_PER_MEGABIT = 1_000_000
+
+/** Short label of what a recording asked for, for the debug overlay. */
+private fun stabilizationLabel(choice: com.vayunmathur.camera.domain.VideoStabilizationChoice): String {
+    val parts = listOfNotNull(
+        when (choice.videoMode) {
+            null -> null
+            com.vayunmathur.camera.domain.VideoStabilizationPolicy.MODE_PREVIEW -> "EIS(preview)"
+            else -> "EIS"
+        },
+        if (choice.opticalOn) "OIS" else null,
+    )
+    return parts.joinToString("+").ifEmpty { "off" }
+}
+
 @android.annotation.SuppressLint("MissingPermission")
 fun CameraViewModel.toggleRecording() {
     // Cancel countdown if active
@@ -124,37 +139,53 @@ internal fun CameraViewModel.startRecording() {
         useHevc -> android.media.MediaFormat.MIMETYPE_VIDEO_HEVC
         else -> android.media.MediaFormat.MIMETYPE_VIDEO_AVC
     }
-    // Tier must also be a stream size this lens advertises (PRIVATE is the
-    // honest proxy for the encoder surface): a tier the HAL cannot stream
-    // fails the capture-session configure, as UHD on a 1080p front lens does.
-    val manager0 = app.getSystemService(android.hardware.camera2.CameraManager::class.java)
+    // Rate first, then the best tier that works at it: 60 fps when the lens, the
+    // stream size and the encoder all allow it (UHD60 before FHD60 before 30 fps),
+    // otherwise the next rate down. Tier must also be a stream size this lens
+    // advertises (PRIVATE is the honest proxy for the encoder surface): a tier the
+    // HAL cannot stream fails the capture-session configure, as UHD on a 1080p
+    // front lens does.
+    val cameraSnapshot0 = recordingCameraSnapshot()
+    val cameraId0 = cameraSnapshot0?.first
+    val snapshot0 = cameraSnapshot0?.second
     val facing0 = selectedLensMutable.value?.facing ?: currentLensFacing()
-    val cameraId0 = manager0?.let {
-        com.vayunmathur.camera.platform.camera2.CharacteristicsFacade.resolveCamera2Id(it, facing0)
-    }
-    val snapshot0 = if (manager0 != null && cameraId0 != null) {
-        com.vayunmathur.camera.platform.camera2.CharacteristicsFacade
-            .tryFromCameraManager(manager0, cameraId0)?.snapshot
-    } else {
-        null
-    }
     val privateSizes = snapshot0?.streamConfig
         ?.sizesFor(android.graphics.ImageFormat.PRIVATE).orEmpty()
-    val tier = listOf(
+    val tuning = videoTuningMutable.value
+    val fixedRates = com.vayunmathur.camera.domain.VideoFpsPolicy
+        .fixedRates(snapshot0?.aeTargetFpsRanges.orEmpty().map { it.lower to it.upper })
+    val tiers = listOf(
         com.vayunmathur.camera.domain.VideoQualityTier.UHD,
         com.vayunmathur.camera.domain.VideoQualityTier.FHD,
         com.vayunmathur.camera.domain.VideoQualityTier.HD,
         com.vayunmathur.camera.domain.VideoQualityTier.SD,
-    ).firstOrNull { candidate ->
+    )
+    fun fits(candidate: com.vayunmathur.camera.domain.VideoQualityTier, fps: Int): Boolean =
         (privateSizes.isEmpty() || privateSizes.any {
             it.width == candidate.width && it.height == candidate.height
-        }) && CodecSupport.supportsVideoBitrate(
-            mime, candidate.width, candidate.height, 30, candidate.baseBitrateBps
-        )
-    } ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD
+        }) &&
+            (cameraId0 == null ||
+                maxStreamFps(cameraId0, android.util.Size(candidate.width, candidate.height)) >= fps) &&
+            CodecSupport.supportsVideoBitrate(
+                mime, candidate.width, candidate.height, fps, candidate.bitrateFor(fps)
+            )
+    val fpsChoice = com.vayunmathur.camera.domain.VideoFpsPolicy
+        .candidates(fixedRates, tuning.fps, cinematic = recordingMode == CameraMode.CINEMATIC)
+        .firstNotNullOfOrNull { rate -> tiers.firstOrNull { fits(it, rate) }?.let { rate to it } }
+    val fps = fpsChoice?.first ?: com.vayunmathur.camera.domain.VideoFpsPolicy.STANDARD
+    val tier = fpsChoice?.second ?: com.vayunmathur.camera.domain.VideoQualityTier.FHD
     boundVideoQualityTier = tier
+    videoFpsTarget = fps
 
-    val decision = computeAdaptiveBitrateDecision(tier, useAv1 = useAv1, useHevc = useHevc)
+    val stabilization = com.vayunmathur.camera.domain.VideoStabilizationPolicy.choose(
+        // Cinematic exists for stabilized footage, so it stays on whatever the switch says.
+        enabled = tuning.stabilizationEnabled || recordingMode == CameraMode.CINEMATIC,
+        videoModes = snapshot0?.videoStabilizationModes.orEmpty(),
+        opticalModes = snapshot0?.opticalStabilizationModes.orEmpty(),
+        sdkInt = android.os.Build.VERSION.SDK_INT,
+    )
+
+    val decision = computeAdaptiveBitrateDecision(tier, useAv1 = useAv1, useHevc = useHevc, fps = fps)
     boundVideoBitrateBps = decision.bitrateBps
     if (decision.forcedReduction) {
         // The one user-visible adaptive note, and only for a forced cut:
@@ -189,11 +220,25 @@ internal fun CameraViewModel.startRecording() {
     val config = CustomRecordingConfig(
         width = tier.width,
         height = tier.height,
-        fps = 30,
+        fps = fps,
         videoMime = mime,
         audioEnabled = audioEnabled,
         // Physical mic from the bind-time snapshot (held during a take).
         audioInputDevice = bindTimeSettings.value.audioInputDevice,
+        stabilizationMode = stabilization.videoMode,
+        opticalStabilization = stabilization.opticalOn,
+    )
+    debug.reset()
+    debug.bind.value = VideoBindSummary(
+        resolution = "${tier.width}x${tier.height}",
+        codec = when {
+            useAv1 -> "AV1"
+            useHevc -> "HEVC"
+            else -> "AVC"
+        },
+        fpsTarget = fps,
+        bitrateMbps = decision.bitrateBps / BITS_PER_MEGABIT,
+        stabilization = stabilizationLabel(stabilization),
     )
     val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision)
     val engine = Camera2VideoRecordingEngine(
@@ -203,6 +248,7 @@ internal fun CameraViewModel.startRecording() {
         motionSupplier = { sceneMotionEstimator.lastClassification },
         onMotionSample = { sample -> onSceneMotionSample(sample) },
         onError = { e -> onVideoEngineError(e) },
+        onFrameResult = { frameNs, exposureNs, iso, focalMm -> debug.onFrame(frameNs, exposureNs, iso, focalMm) },
     )
     camera2RecordingState.engine = engine
     camera2RecordingState.outputFile = cacheFile
@@ -230,6 +276,7 @@ internal fun CameraViewModel.startRecording() {
             Log.error("Camera2Recorder", "Camera2 recording failed to start", e)
             camera2RecordingState.engine = null
             camera2RecordingMutable.value = false
+            debug.reset()
             cacheFile.delete()
             com.vayunmathur.library.util.AppMessages.show(
                 app.getString(com.vayunmathur.camera.R.string.camera_recording_failed)
@@ -276,6 +323,7 @@ private fun CameraViewModel.onCamera2RecordingFinalized(outcome: VideoRecordingO
     camera2RecordingState.outputFile = null
     camera2RecordingState.previewTexture.value = null
     camera2RecordingMutable.value = false
+    debug.reset()
     if (outcome.error != null) {
         Log.error("Camera2Recorder", "Recording failed; discarding ${cacheFile.name}", outcome.error)
         cacheFile.delete()

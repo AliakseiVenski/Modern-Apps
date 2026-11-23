@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -52,6 +53,13 @@ data class CustomRecordingConfig(
      */
     val audioInputDevice: com.vayunmathur.camera.platform.camera2.AudioInputDeviceSelection =
         com.vayunmathur.camera.platform.camera2.AudioInputDeviceSelection.AUTO,
+    /**
+     * `CONTROL_VIDEO_STABILIZATION_MODE` to request (see `VideoStabilizationPolicy`), or null to
+     * leave the HAL default, which is unstabilized for TEMPLATE_RECORD.
+     */
+    val stabilizationMode: Int? = null,
+    /** Also request `LENS_OPTICAL_STABILIZATION_MODE_ON` (OIS under the electronic stabilization). */
+    val opticalStabilization: Boolean = false,
 )
 
 /** Read-back summary of a finished file (see [Camera2VideoRecordingEngine.validateOutput]). */
@@ -88,6 +96,8 @@ class Camera2VideoRecordingEngine(
     private val motionSupplier: () -> SceneMotion?,
     private val onMotionSample: (com.vayunmathur.camera.domain.FrameDiffSample) -> Unit,
     private val onError: (Exception) -> Unit,
+    /** Sees every captured frame's sensor timestamp, exposure, ISO and focal length (debug overlay). */
+    private val onFrameResult: ((timestampNs: Long, exposureNs: Long?, iso: Int?, focalMm: Float?) -> Unit)? = null,
 ) : VideoRecordingEngine {
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
@@ -292,8 +302,17 @@ class Camera2VideoRecordingEngine(
                                         CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                                         android.util.Range(config.captureFps, config.captureFps)
                                     )
+                                    config.stabilizationMode?.let {
+                                        set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it)
+                                    }
+                                    if (config.opticalStabilization) {
+                                        set(
+                                            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                                            CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
+                                        )
+                                    }
                                 }.build()
-                                session.setRepeatingRequest(request, null, cameraHandler)
+                                session.setRepeatingRequest(request, frameResultCallback(), cameraHandler)
                             } catch (e: IllegalStateException) {
                                 // Device closed under us (a competing
                                 // session took the camera): surface as an
@@ -329,6 +348,26 @@ class Camera2VideoRecordingEngine(
         val facing = manager.getCameraCharacteristics(cameraId)
             .get(CameraCharacteristics.LENS_FACING)
         Log.debug("Camera2Recorder", "opening camera $cameraId facing=$facing")
+    }
+
+    /** Capture callback feeding [onFrameResult]; null when nobody listens, so no per-frame work is queued. */
+    private fun frameResultCallback(): CameraCaptureSession.CaptureCallback? {
+        val sink = onFrameResult ?: return null
+        return object : CameraCaptureSession.CaptureCallback() {
+            override fun onCaptureCompleted(
+                session: CameraCaptureSession,
+                request: CaptureRequest,
+                result: android.hardware.camera2.TotalCaptureResult,
+            ) {
+                val timestamp = result.get(android.hardware.camera2.CaptureResult.SENSOR_TIMESTAMP) ?: return
+                sink(
+                    timestamp,
+                    result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME),
+                    result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY),
+                    result.get(android.hardware.camera2.CaptureResult.LENS_FOCAL_LENGTH),
+                )
+            }
+        }
     }
 
     /** Every 2 s: ask the controller, apply via encoder parameters when it moves. */

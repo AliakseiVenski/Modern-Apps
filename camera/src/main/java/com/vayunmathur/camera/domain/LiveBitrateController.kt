@@ -31,11 +31,13 @@ class LiveBitrateController(
     private var pendingCandidateBps: Int? = null
     private var pendingWins: Int = 0
 
-    val floorBps: Int = (decision.effectiveTier.baseBitrateBps *
+    private val effectiveRungBps: Int = decision.effectiveTier.bitrateFor(decision.fps)
+
+    val floorBps: Int = (effectiveRungBps *
         AdaptiveVideoBitratePolicy.QUALITY_FLOOR_FRACTION).roundToInt()
 
     val ceilingBps: Int = if (decision.reductions.isEmpty()) {
-        maxOf(decision.baseTier.baseBitrateBps, decision.bitrateBps)
+        maxOf(decision.baseTier.bitrateFor(decision.fps), decision.bitrateBps)
     } else {
         decision.bitrateBps
     }
@@ -47,7 +49,7 @@ class LiveBitrateController(
             SceneMotion.MODERATE -> AdaptiveVideoBitratePolicy.MODERATE_FACTOR
             else -> AdaptiveVideoBitratePolicy.HIGH_MOTION_FACTOR
         }
-        val raw = (decision.effectiveTier.baseBitrateBps * factor).roundToInt()
+        val raw = (effectiveRungBps * factor).roundToInt()
         return raw.coerceIn(floorBps, ceilingBps)
     }
 

@@ -84,15 +84,17 @@ private fun readRawLensOrThrow(manager: CameraManager, cameraId: String): RawLen
         // External / unknown: not a phone lens.
         else -> return null
     }
+    // Keep cameras even when the HAL doesn't report focal lengths; the label math falls
+    // back to the nominal zoom ratios.
     val focal = chars.get(
         CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
-    )?.firstOrNull() ?: return null
+    )?.firstOrNull()
     val sensorSize = chars.get(
         CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE
     )
     val eq35 = if (sensorSize != null && sensorSize.width > 0 && sensorSize.height > 0) {
         val diag = sqrt(sensorSize.width * sensorSize.width + sensorSize.height * sensorSize.height)
-        focal * FULL_FRAME_DIAGONAL_MM / diag
+        focal?.let { f -> f * FULL_FRAME_DIAGONAL_MM / diag }
     } else {
         null
     }
@@ -107,22 +109,28 @@ private fun readRawLensOrThrow(manager: CameraManager, cameraId: String): RawLen
     } else {
         null
     }
-    return RawLens(cameraId, facing, focal, eq35, mono, intrinsic, zoomFloor)
+    // Logical multi-camera: digital zoom stops share the physical sensors of their source
+    // lens, so dedupe can collapse them into one pill instead of one pill per stop.
+    val physicalBacking = chars.physicalCameraIds.takeIf { it.isNotEmpty() }
+    return RawLens(cameraId, facing, focal, eq35, mono, intrinsic, zoomFloor, physicalBacking)
 }
 
 private data class RawLens(
     val id: String,
     val facing: LensFacing,
-    val focalMm: Float,
+    val focalMm: Float?,
     val eq35Mm: Float?,
     val mono: Boolean,
     val intrinsicZoomRatio: Float?,
     val minZoomRatio: Float?,
+    val physicalBacking: Set<String>?,
 )
 
 /** Classifies one facing family into [PhysicalLens] entries with fallback priorities. */
 private fun buildFamily(facing: LensFacing, raws: List<RawLens>): List<PhysicalLens> {
-    val family = raws.filter { it.facing == facing }.sortedBy { it.focalMm }
+    // Null focal lengths sort last so lenses with reported focal lengths stay ordered while
+    // HALs that omit it keep working via the fallbacks.
+    val family = raws.filter { it.facing == facing }.sortedBy { it.focalMm ?: Float.MAX_VALUE }
     if (family.isEmpty()) return emptyList()
     val nonMono = family.filterNot { it.mono }
     // Wide reference: 35mm-eq closest to ~27mm; fall back to the median focal length.
@@ -145,13 +153,16 @@ private fun buildFamily(facing: LensFacing, raws: List<RawLens>): List<PhysicalL
 /** Classifies one raw lens against the family reference into a [PhysicalLens]. */
 private fun classifyLens(raw: RawLens, reference: RawLens, facing: LensFacing): PhysicalLens {
     val type = classifyType(raw, reference, facing)
+    val refFocal = reference.focalMm
+    val nominal = if (raw.focalMm != null && refFocal != null && refFocal > 0f) raw.focalMm / refFocal else 1f
     return PhysicalLens(
         logicalCameraId = raw.id,
         lensType = type,
         facing = facing,
         focalLengthMm35Eq = raw.eq35Mm,
-        nominalZoomRatio = raw.focalMm / reference.focalMm,
+        nominalZoomRatio = nominal,
         intrinsicZoomRatio = raw.intrinsicZoomRatio,
+        physicalBacking = raw.physicalBacking,
         fallbackPriority = priorityOf(type),
         labelKey = labelOf(type),
     )
@@ -161,8 +172,12 @@ private fun classifyLens(raw: RawLens, reference: RawLens, facing: LensFacing): 
 private fun classifyType(raw: RawLens, reference: RawLens, facing: LensFacing): LensType {
     if (raw.mono) return LensType.MONOCHROME
     if (raw == reference) return if (facing == LensFacing.FRONT) LensType.FRONT else LensType.WIDE
-    if (raw.focalMm < reference.focalMm * ULTRA_WIDE_RATIO) return LensType.ULTRA_WIDE
-    if (raw.focalMm > reference.focalMm * TELEPHOTO_RATIO) return LensType.TELEPHOTO
+    if (raw.focalMm != null && reference.focalMm != null) {
+        val focal = raw.focalMm
+        val referenceFocal = reference.focalMm
+        if (focal < referenceFocal * ULTRA_WIDE_RATIO) return LensType.ULTRA_WIDE
+        if (focal > referenceFocal * TELEPHOTO_RATIO) return LensType.TELEPHOTO
+    }
     return LensType.WIDE
 }
 

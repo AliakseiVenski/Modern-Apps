@@ -56,8 +56,41 @@ fun CameraViewModel.updateZoomLevels(minZoom: Float, maxZoom: Float) {
             "photoActive=${photoSessionActiveMutable.value} currentRatio=${zoomRatioMutable.value} " +
             "thread=${Thread.currentThread().name}"
     )
+    val custom = customZoomLevelsMutable.value
+    val levels = resolveZoomLevels(custom, minZoom, maxZoom)
+    Log.dev(
+        "NightPreview",
+        "updateZoomLevels() emitting levels=$levels (custom=${custom.isNotEmpty()}) – if min=1f max=1f, " +
+            "only [1x] will show, explaining 'all zoom levels also disappear'"
+    )
+    availableZoomLevelsMutable.value = levels
+}
+
+/** Recomputes the pills from the live session's zoom range, e.g. after the custom stops changed. */
+fun CameraViewModel.refreshZoomLevels() {
+    val range = activeCamera2Session?.characteristics?.zoomRatioRange ?: return
+    updateZoomLevels(range.lower, range.upper)
+}
+
+/**
+ * The pills for a lens: exactly the user's [custom] stops the lens can reach (a stop outside
+ * [minZoom]..[maxZoom] would silently do nothing), or the automatic stops when none are set.
+ */
+internal fun resolveZoomLevels(custom: List<Float>, minZoom: Float, maxZoom: Float): List<Pair<String, Float>> =
+    if (custom.isEmpty()) {
+        buildDefaultZoomLevels(minZoom, maxZoom)
+    } else {
+        custom.filter { it in minZoom..maxZoom }
+            .map { formatZoomLabel(it) to it }
+            .ifEmpty { listOf("1x" to 1f) }
+    }
+
+/**
+ * Automatic stops (used when the user has not configured their own): a wide entry when the lens
+ * can zoom out past 1x, 1x, then the tele stops that fit the max zoom.
+ */
+internal fun buildDefaultZoomLevels(minZoom: Float, maxZoom: Float): List<Pair<String, Float>> {
     val levels = mutableListOf<Pair<String, Float>>()
-    // Wide-angle entry only when the lens can actually zoom out past 1x.
     if (minZoom < WIDE_ZOOM_ENTRY_MAX) {
         levels.add(formatZoomLabel(minZoom) to minZoom)
     }
@@ -65,12 +98,7 @@ fun CameraViewModel.updateZoomLevels(minZoom: Float, maxZoom: Float) {
     for (tele in TELE_ZOOM_LEVELS) {
         if (tele <= maxZoom + TELE_ZOOM_TOLERANCE) levels.add(formatZoomLabel(tele) to tele)
     }
-    Log.dev(
-        "NightPreview",
-        "updateZoomLevels() emitting levels=$levels – if min=1f max=1f, only [1x] will show, " +
-            "explaining 'all zoom levels also disappear'"
-    )
-    availableZoomLevelsMutable.value = levels
+    return levels
 }
 
 /**

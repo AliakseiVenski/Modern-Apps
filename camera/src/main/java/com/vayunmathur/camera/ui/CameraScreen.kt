@@ -10,14 +10,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.Route
 import com.vayunmathur.camera.platform.CameraMode
 import com.vayunmathur.camera.platform.CameraViewModel
@@ -52,6 +57,10 @@ fun CameraScreen(
 ) {
     val view = LocalView.current
     val state = rememberCameraScreenState(viewModel)
+    var quickMenuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(state.cameraMode) { quickMenuOpen = false }
+    // The recording engine reads these settings once at start, so no menu while recording; Slo-Mo has its own path.
+    val quickMenuAllowed = !state.isRecording && !state.isSloMo
 
     // The shutter action, shared by the on-screen button and the volume-key (hardware) shutter.
     val performCapture: () -> Unit = {
@@ -162,6 +171,10 @@ fun CameraScreen(
                         viewModel = viewModel,
                         animatedRotation = animatedRotation,
                     )
+                    DebugOverlay(viewModel, Modifier.align(Alignment.TopStart).padding(8.dp))
+                    if (quickMenuOpen && quickMenuAllowed) {
+                        VideoQuickMenu(viewModel) { quickMenuOpen = false }
+                    }
                 }
 
                 CameraBottomControls(
@@ -171,6 +184,7 @@ fun CameraScreen(
                     onCaptureResult = onCaptureResult,
                     onCapture = { currentCapture() },
                     animatedRotation = animatedRotation,
+                    onVideoQuickMenu = if (quickMenuAllowed) ({ quickMenuOpen = !quickMenuOpen }) else null,
                 )
             }
 

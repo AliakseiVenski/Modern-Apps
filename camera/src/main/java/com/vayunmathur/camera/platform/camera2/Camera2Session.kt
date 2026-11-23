@@ -588,7 +588,12 @@ class Camera2Session(
         }
     }
 
+    /** Sees every preview frame's metadata on the executor thread (the debug overlay's feed). */
+    @Volatile
+    var previewFrameObserver: ((RawStillMetadata) -> Unit)? = null
+
     private fun onPreviewResult(raw: RawStillMetadata) {
+        previewFrameObserver?.invoke(raw)
         val timestamp = raw.sensorTimestampNs ?: return
         latestPreviewTimestampNs = timestamp
         latestPreviewMeta = raw
