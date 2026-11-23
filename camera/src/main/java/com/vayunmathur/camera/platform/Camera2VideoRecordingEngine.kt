@@ -418,7 +418,7 @@ class Camera2VideoRecordingEngine(
                 val sinceMs = if (lastLumaAtMs == 0L) LUMA_INTERVAL_MS else nowMs - lastLumaAtMs
                 lastLumaAtMs = nowMs
                 isoController
-                    ?.update(grid.average(), sinceMs.coerceAtMost(LUMA_MAX_GAP_MS) / 1000.0)
+                    ?.update(com.vayunmathur.camera.domain.HighlightMetering.effectiveLuma(grid), sinceMs.coerceAtMost(LUMA_MAX_GAP_MS) / 1000.0)
                     ?.let { applyExposureLive(it) }
             }
             if (motionDue) {

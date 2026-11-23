@@ -2,6 +2,7 @@ package com.vayunmathur.camera.platform
 
 import android.os.SystemClock
 import com.vayunmathur.camera.domain.ExposureSetting
+import com.vayunmathur.camera.domain.HighlightMetering
 import com.vayunmathur.camera.domain.LumaPlaneMath
 import com.vayunmathur.camera.domain.PlaneView
 import com.vayunmathur.camera.domain.ShutterPriorityController
@@ -49,7 +50,8 @@ internal class PreviewIsoCap {
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return
         // A tapped point meters its own window (as the HAL's AE does), else the whole frame.
-        val luma = tappedLuma(plane, session) ?: LumaPlaneMath.grid(plane)?.first?.average() ?: return
+        val luma = tappedLuma(plane, session)
+            ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) } ?: return
         lastMs = now
         val frameNanos = NANOS_PER_SECOND / cap.fps
         val active = controller ?: ShutterPriorityController(
