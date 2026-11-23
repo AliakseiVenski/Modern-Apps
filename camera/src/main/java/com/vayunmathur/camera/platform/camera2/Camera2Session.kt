@@ -238,6 +238,9 @@ class Camera2Session(
         }
     }
 
+    /** True while the user holds exposure (long press); the software ISO cap freezes with it. */
+    val aeLocked: Boolean get() = controls.aeLock
+
     /** Latest AE-converged (exposureNs, iso) from preview results, for manual seeding. */
     fun latestAeSnapshot(): Pair<Long?, Int?> =
         latestPreviewMeta.let { (it?.exposureTimeNs) to (it?.iso) }
@@ -250,9 +253,10 @@ class Camera2Session(
     }
 
     /**
-     * Tap metering: transforms a normalised viewfinder tap into an AE metering region
-     * (see [MeteringTransform]) and re-issues the request. Focus is never touched: AF stays
-     * continuous. [lockAe] freezes the exposure after metering (long press).
+     * Tap metering: transforms a normalised viewfinder tap into AF + AE metering regions
+     * (see [MeteringTransform]) and re-issues the request. No AF trigger is sent, so continuous
+     * AF keeps tracking: it focuses on the tapped area and refocuses when the subject leaves it.
+     * [lockAe] freezes the exposure after metering (long press).
      * [displayRotationDegrees] is the display rotation (0/90/180/270);
      * [mirrored] is true for a mirrored front preview.
      */
@@ -276,7 +280,7 @@ class Camera2Session(
                 displayRotationDegrees = displayRotationDegrees,
                 mirrored = mirrored,
             )
-            controls = controls.copy(afRegion = null, aeRegion = region, aeLock = lockAe)
+            controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
         }
     }

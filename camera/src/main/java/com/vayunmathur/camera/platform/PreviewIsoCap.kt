@@ -38,6 +38,10 @@ internal class PreviewIsoCap {
     fun onYPlane(plane: PlaneView, session: Camera2Session?) {
         val cap = setup ?: return
         session ?: return
+        if (session.aeLocked) {
+            status.value = "ISO cap ${cap.isoLimit}: AE locked"
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return

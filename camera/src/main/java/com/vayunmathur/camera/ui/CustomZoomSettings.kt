@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -36,6 +36,8 @@ import com.vayunmathur.library.ui.LocalContentColor
 import com.vayunmathur.library.ui.MaterialTheme
 import com.vayunmathur.library.ui.SettingsSection
 import com.vayunmathur.library.ui.Text
+
+private val ZOOM_FIELD_HEIGHT = 40.dp
 
 /**
  * User-configurable zoom-stop pills shown on the zoom bar.
@@ -71,6 +73,7 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
                     selected = false,
                     onClick = { viewModel.setCustomZoomLevels(levels - ratio) },
                     label = { Text(formatZoomLabel(ratio), maxLines = 1) },
+                    modifier = Modifier.height(ZOOM_FIELD_HEIGHT),
                     shape = RoundedCornerShape(50),
                     trailingIcon = { IconClear(Modifier.size(18.dp), contentDescription = null) },
                 )
@@ -99,9 +102,9 @@ internal fun CustomZoomSettings(viewModel: CameraViewModel) {
                 decorationBox = { inner ->
                     Box(
                         Modifier
-                            .heightIn(min = 40.dp)
+                            .height(ZOOM_FIELD_HEIGHT)
                             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (input.isEmpty()) {
