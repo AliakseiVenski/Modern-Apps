@@ -12,7 +12,7 @@ import kotlin.math.roundToInt
 private const val WIDE_ZOOM_ENTRY_MAX = 0.95f
 
 /** Tele zoom-bar entries and the tolerance for including them at the range edge. */
-private val TELE_ZOOM_LEVELS = listOf(2f, 5f)
+private val TELE_ZOOM_LEVELS = listOf(3f)
 private const val TELE_ZOOM_TOLERANCE = 0.05f
 
 fun CameraViewModel.setQrResult(text: String?) {

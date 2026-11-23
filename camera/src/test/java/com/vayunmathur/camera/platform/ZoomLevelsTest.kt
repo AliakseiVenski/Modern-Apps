@@ -6,13 +6,14 @@ import kotlin.test.assertEquals
 class ZoomLevelsTest {
     @Test fun automaticStopsAddWideAndTeleWhereTheLensReachesThem() {
         assertEquals(
-            listOf(".6" to 0.6f, "1x" to 1f, "2x" to 2f, "5x" to 5f),
+            listOf(".6" to 0.6f, "1x" to 1f, "3x" to 3f),
             resolveZoomLevels(emptyList(), minZoom = 0.6f, maxZoom = 8f),
         )
     }
 
     @Test fun automaticStopsSkipTeleBeyondTheMaxZoom() {
-        assertEquals(listOf("1x" to 1f, "2x" to 2f), resolveZoomLevels(emptyList(), minZoom = 1f, maxZoom = 3f))
+        assertEquals(listOf("1x" to 1f, "3x" to 3f), resolveZoomLevels(emptyList(), minZoom = 1f, maxZoom = 3f))
+        assertEquals(listOf("1x" to 1f), resolveZoomLevels(emptyList(), minZoom = 1f, maxZoom = 2f))
     }
 
     @Test fun customStopsReplaceTheAutomaticOnes() {
