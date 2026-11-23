@@ -152,10 +152,10 @@ interface CaptureSessionHandle {
     }
 
     /**
-     * One-shot AF scan at the regions in [params] (tap-to-focus), released back to continuous AF after
-     * [AF_HOLD_MS]. A repeating AF trigger would re-scan every frame, so this is a single capture.
+     * One-shot AF trigger ([CaptureRequest.CONTROL_AF_TRIGGER_START] or CANCEL) with the controls in
+     * [params]. A repeating AF trigger would re-scan every frame, so this is a single capture.
      */
-    fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>) {}
+    fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>, trigger: Int) {}
 
     /** True when this session was created as reprocessable. */
     val isReprocessable: Boolean get() = false
@@ -240,7 +240,10 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
 ) {
     addTarget(target)
     set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-    set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+    set(
+        CaptureRequest.CONTROL_AF_MODE,
+        if (params.afAuto) CaptureRequest.CONTROL_AF_MODE_AUTO else CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
+    )
     if (params.manualExposureTimeNs != null || params.manualSensitivityIso != null) {
         set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         params.manualExposureTimeNs?.let { set(CaptureRequest.SENSOR_EXPOSURE_TIME, it) }
@@ -722,8 +725,8 @@ private class AndroidCaptureSessionHandle(
         session.setRepeatingRequest(builder.build(), captureCallback, handler)
     }
 
-    override fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>) {
-        fun send(trigger: Int) {
+    override fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>, trigger: Int) {
+        run {
             val builder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             builder.applyPreviewParams(params, targets.first())
             targets.drop(1).forEach { builder.addTarget(it) }
@@ -745,10 +748,6 @@ private class AndroidCaptureSessionHandle(
                 }
             }, handler)
         }
-        send(CaptureRequest.CONTROL_AF_TRIGGER_START)
-        handler.postDelayed({
-            runCatching { send(CaptureRequest.CONTROL_AF_TRIGGER_CANCEL) }
-        }, AF_HOLD_MS)
     }
 
     override fun captureReprocess(

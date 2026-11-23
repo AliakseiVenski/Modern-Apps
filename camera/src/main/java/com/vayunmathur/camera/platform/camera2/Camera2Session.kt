@@ -286,14 +286,15 @@ class Camera2Session(
             )
             controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
-            if (!lockAe) triggerAutoFocus()
+            if (!lockAe) scanAutoFocus()
         }
     }
 
     /** Clears tap metering, returning AF/AE to continuous full-frame. */
     fun clearMetering() {
         executor.execute {
-            controls = controls.copy(afRegion = null, aeRegion = null, aeLock = false)
+            afTapGeneration++
+            controls = controls.copy(afRegion = null, aeRegion = null, aeLock = false, afAuto = false)
             issueRepeatingRequest()
         }
     }
@@ -689,12 +690,28 @@ class Camera2Session(
 
     // -- internals (executor thread only) ------------------------------------
 
-    private fun triggerAutoFocus() {
+    private fun triggerAutoFocus(trigger: Int) {
         val session = captureSession ?: return
         val surface = previewSurface ?: return
         if (stateMachine.state != SessionState.STREAMING) return
         val targets = listOfNotNull(surface, ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface)
-        runCatching { session.triggerAutoFocus(Camera2Controls.resolve(controls, snapshot), targets) }
+        runCatching { session.triggerAutoFocus(Camera2Controls.resolve(controls, snapshot), targets, trigger) }
+    }
+
+    private var afTapGeneration = 0
+
+    /** Tap scan in AF_MODE_AUTO (always scans), then back to continuous AF after [AF_HOLD_MS]. */
+    private fun scanAutoFocus() {
+        val generation = ++afTapGeneration
+        controls = controls.copy(afAuto = true)
+        issueRepeatingRequest()
+        triggerAutoFocus(android.hardware.camera2.CaptureRequest.CONTROL_AF_TRIGGER_START)
+        android.os.Handler(executor.looper).postDelayed({
+            if (generation != afTapGeneration) return@postDelayed
+            triggerAutoFocus(android.hardware.camera2.CaptureRequest.CONTROL_AF_TRIGGER_CANCEL)
+            controls = controls.copy(afAuto = false)
+            issueRepeatingRequest()
+        }, AF_HOLD_MS)
     }
 
     private fun issueRepeatingRequest() {
