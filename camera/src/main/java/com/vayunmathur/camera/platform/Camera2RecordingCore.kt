@@ -35,12 +35,33 @@ import java.nio.ByteBuffer
  * surface handoff and [SharedRecordingCoreLifecycle] for drain/EOS/finalize.
  */
 class Camera2RecordingCore(
-    val config: CustomRecordingConfig,
+    config: CustomRecordingConfig,
     private val initialBitrateBps: () -> Int,
     ownership: RecordingSessionOwnership = RecordingSessionOwnership.ENGINE_OWNED,
     /** Live input-device list for [config]'s preferred-device choice (engine-supplied). */
     private val audioInputDevices: () -> List<android.media.AudioDeviceInfo> = { emptyList() },
 ) {
+    /**
+     * The recording's configuration. The video fields (size, fps, mime, HDR) are fixed once the codec is
+     * prepared; a core prepared ahead of the take takes the per-take fields (audio, orientation) from
+     * [applyTakeConfig] before [setupMuxerAndAudio].
+     */
+    var config: CustomRecordingConfig = config
+        private set
+
+    /** Swaps in the per-take configuration; the video fields must match the prepared codec. */
+    fun applyTakeConfig(take: CustomRecordingConfig) {
+        require(
+            take.width == config.width && take.height == config.height && take.fps == config.fps &&
+                take.videoMime == config.videoMime && take.hdr == config.hdr,
+        ) { "take config differs from the prepared video format" }
+        config = take
+    }
+
+    /** True while the mic is muted: the audio track keeps its timeline but carries silence. */
+    @Volatile
+    var audioMuted: Boolean = false
+
     val lifecycle = SharedRecordingCoreLifecycle(ownership)
     private val encoderHandoff = EncoderSurfaceHandoff()
 
@@ -349,6 +370,7 @@ class Camera2RecordingCore(
             while (draining) {
                 val read = record.read(chunk, 0, chunk.size)
                 if (read <= 0) continue
+                if (audioMuted) java.util.Arrays.fill(chunk, 0, read, 0.toByte())
                 val inputIndex = try {
                     codec.dequeueInputBuffer(AUDIO_DEQUEUE_TIMEOUT_US)
                 } catch (_: IllegalStateException) {

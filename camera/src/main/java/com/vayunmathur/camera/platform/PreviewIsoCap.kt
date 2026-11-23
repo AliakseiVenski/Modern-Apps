@@ -6,6 +6,8 @@ import com.vayunmathur.camera.domain.LumaPlaneMath
 import com.vayunmathur.camera.domain.PlaneView
 import com.vayunmathur.camera.domain.ShutterPriorityController
 import com.vayunmathur.camera.platform.camera2.Camera2Session
+import com.vayunmathur.camera.platform.camera2.aeLocked
+import com.vayunmathur.camera.platform.camera2.setIsoCap
 
 /** The cap the viewfinder keeps while a video mode is showing: fps sets the shutter, [isoLimit] the ceiling. */
 internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int)

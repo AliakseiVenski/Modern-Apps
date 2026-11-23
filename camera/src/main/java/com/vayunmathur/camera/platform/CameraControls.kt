@@ -1,5 +1,7 @@
 package com.vayunmathur.camera.platform
 
+import com.vayunmathur.camera.platform.camera2.clearMetering
+import com.vayunmathur.camera.platform.camera2.tapToFocus
 import com.vayunmathur.library.log.Log
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay

@@ -323,15 +323,19 @@ class Camera2VideoRecordingEngine(
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             set(CaptureRequest.CONTROL_ZOOM_RATIO, config.zoomRatio)
                         }
-                        config.stabilizationMode?.let {
-                            set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it)
-                        }
-                        if (config.opticalStabilization) {
-                            set(
-                                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                        // Explicit OFF when disabled: the HAL's template default may stabilize anyway.
+                        set(
+                            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                            config.stabilizationMode ?: CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
+                        )
+                        set(
+                            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                            if (config.opticalStabilization) {
                                 CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
-                            )
-                        }
+                            } else {
+                                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_OFF
+                            },
+                        )
                     }
                     requestBuilder = builder
                     isoController?.let { applyExposure(builder, it.current) }

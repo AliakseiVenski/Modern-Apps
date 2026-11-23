@@ -12,6 +12,15 @@ internal class Camera2RecordingState {
     /** Live Camera2 recording engine (video modes); null when not recording. */
     var engine: Camera2VideoRecordingEngine? = null
 
+    /** Recorder running on the viewfinder's own session; null when not recording (or on the engine path). */
+    var sessionRecorder: SessionVideoRecorder? = null
+
+    /** Encoder prepared ahead for the viewfinder session's next take. */
+    var prepared: PreparedRecorder? = null
+
+    /** Plan of the in-flight session take, to re-arm the next one. */
+    var sessionPlan: RecorderPlan? = null
+
     /** Staged output file of the in-flight Camera2 recording. */
     var outputFile: java.io.File? = null
 

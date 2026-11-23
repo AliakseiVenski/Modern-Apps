@@ -57,6 +57,8 @@ class Camera2Session(
     internal val hdrPreview: Boolean = false,
     /** Video viewfinder: preview + analysis only (a still stream keeps HALs from stabilizing it). */
     internal val videoPreview: Boolean = false,
+    /** Encoder input surface of a prepared recording, configured as a session output (video modes). */
+    initialRecorderSurface: Surface? = null,
 ) {
 
     /** Session lifecycle notifications; all fire on the executor thread. */
@@ -87,9 +89,26 @@ class Camera2Session(
     /** Retained preview `CaptureResult` metadata for [timestampNs], or null. */
     fun previewMetadataFor(timestampNs: Long): RawStillMetadata? = previewMetas[timestampNs]
 
-    private var device: DeviceHandle? = null
-    private var captureSession: CaptureSessionHandle? = null
+    internal var device: DeviceHandle? = null
+    internal var captureSession: CaptureSessionHandle? = null
     internal var previewSurface: Surface? = null
+
+    /** The encoder surface this session was configured with, or null when it cannot record. */
+    internal var recorderSurface: Surface? = initialRecorderSurface
+
+    /** True while the repeating request also feeds [recorderSurface] (a take is running). */
+    internal var recordingTarget = false
+
+    /** The encoder surface the live capture session was actually configured with. */
+    @Volatile
+    private var configuredRecorderSurface: Surface? = null
+
+    /** Whether a take can start on this session without reopening the camera. */
+    val recorderReady: Boolean
+        get() = recorderSurface != null && recorderSurface === configuredRecorderSurface
+
+    /** The surface a take on this session would encode into, once [recorderReady]. */
+    val readyRecorderSurface: Surface? get() = recorderSurface.takeIf { recorderReady }
     private var previewSize: FrameSize? = null
     internal var stillOutput: StillOutput? = null
     internal var stillSize: FrameSize? = null
@@ -113,7 +132,10 @@ class Camera2Session(
     private var latestPreviewMeta: RawStillMetadata? = null
     internal var pendingStill: PendingStill? = null
     internal var displayRotationDegrees: Int = 0
-    private var controls: Camera2ControlState = Camera2ControlState.DEFAULT
+    internal var controls: Camera2ControlState = Camera2ControlState.DEFAULT
+
+    /** Bumped by every tap scan so a stale release timer ignores itself. */
+    internal var afTapGeneration = 0
 
     /** In-flight still: JPEG bytes and result metadata pair up by arrival. */
     internal class PendingStill(
@@ -209,26 +231,6 @@ class Camera2Session(
         }
     }
 
-    /** Video modes: fixed fps and stabilization on the viewfinder request (nulls clear them). */
-    fun setVideoParams(fps: Int?, stabilizationMode: Int?, opticalStabilization: Boolean) {
-        executor.execute {
-            controls = controls.copy(
-                videoFps = fps,
-                videoStabilizationMode = stabilizationMode,
-                opticalStabilization = opticalStabilization,
-            )
-            issueRepeatingRequest()
-        }
-    }
-
-    /** Video ISO cap exposure (AE off); nulls return to AE. Fed ~20 Hz by the preview's brightness meter. */
-    fun setIsoCap(timeNs: Long?, iso: Int?) {
-        executor.execute {
-            controls = controls.copy(isoCapTimeNs = timeNs, isoCapIso = iso)
-            issueRepeatingRequest()
-        }
-    }
-
     /** Post-processing toggles (#662); preview + stills inherit them. */
     fun setPostProcessing(noiseReductionHighQuality: Boolean, edgeHighQuality: Boolean) {
         executor.execute {
@@ -240,9 +242,6 @@ class Camera2Session(
         }
     }
 
-    /** True while the user holds exposure (long press); the software ISO cap freezes with it. */
-    val aeLocked: Boolean get() = controls.aeLock
-
     /** Latest AE-converged (exposureNs, iso) from preview results, for manual seeding. */
     fun latestAeSnapshot(): Pair<Long?, Int?> =
         latestPreviewMeta.let { (it?.exposureTimeNs) to (it?.iso) }
@@ -250,55 +249,6 @@ class Camera2Session(
     fun setExposureCompEv(ev: Float) {
         executor.execute {
             controls = controls.copy(exposureCompEv = ev)
-            issueRepeatingRequest()
-        }
-    }
-
-    /**
-     * Tap metering: transforms a normalised viewfinder tap into AF + AE metering regions
-     * (see [MeteringTransform]) and re-issues the request. One AF scan is triggered at the point and
-     * released after [AF_HOLD_MS], so continuous AF then keeps tracking and refocuses when the subject leaves.
-     * [lockAe] freezes the exposure after metering (long press).
-     * [displayRotationDegrees] is the display rotation (0/90/180/270);
-     * [mirrored] is true for a mirrored front preview.
-     */
-    fun tapToFocus(
-        tapX: Float,
-        tapY: Float,
-        displayRotationDegrees: Int = 0,
-        mirrored: Boolean = false,
-        lockAe: Boolean = false,
-    ) {
-        executor.execute {
-            val activeArray = Camera2Controls.activeArrayOf(snapshot)
-            if (activeArray.width <= 0 || activeArray.height <= 0) return@execute
-            val crop = Camera2Controls.currentCropRegion(controls, snapshot)
-            val region = MeteringTransform.meteringRegionForTap(
-                tapX = tapX,
-                tapY = tapY,
-                activeArray = activeArray,
-                cropRegion = crop,
-                sensorOrientationDegrees = snapshot.sensorOrientationDegrees,
-                displayRotationDegrees = displayRotationDegrees,
-                mirrored = mirrored,
-            )
-            com.vayunmathur.library.log.Log.status(
-                "TapFocus",
-                "tap x=$tapX y=$tapY lockAe=$lockAe zoom=${controls.zoomRatio} zoomRange=${snapshot.minZoomRatio}..${snapshot.maxZoomRatio} " +
-                    "activeArray=$activeArray crop=$crop sensorOrientation=${snapshot.sensorOrientationDegrees} " +
-                    "displayRotation=$displayRotationDegrees maxAf=${snapshot.maxAfRegions} region=$region",
-            )
-            controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
-            issueRepeatingRequest()
-            if (!lockAe) scanAutoFocus()
-        }
-    }
-
-    /** Clears tap metering, returning AF/AE to continuous full-frame. */
-    fun clearMetering() {
-        executor.execute {
-            afTapGeneration++
-            controls = controls.copy(afRegion = null, aeRegion = null, aeLock = false, afAuto = false)
             issueRepeatingRequest()
         }
     }
@@ -694,43 +644,14 @@ class Camera2Session(
 
     // -- internals (executor thread only) ------------------------------------
 
-    private fun triggerAutoFocus(trigger: Int) {
-        val session = captureSession ?: return
-        val surface = previewSurface ?: return
-        if (stateMachine.state != SessionState.STREAMING) return
-        val targets = listOfNotNull(surface, ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface)
-        runCatching { session.triggerAutoFocus(Camera2Controls.resolve(controls, snapshot), targets, trigger) }
-    }
-
-    private var afTapGeneration = 0
-
-    /** Tap scan in AF_MODE_AUTO (always scans), then back to continuous AF after [AF_HOLD_MS]. */
-    private fun scanAutoFocus() {
-        val generation = ++afTapGeneration
-        controls = controls.copy(afAuto = true)
-        issueRepeatingRequest()
-        triggerAutoFocus(android.hardware.camera2.CaptureRequest.CONTROL_AF_TRIGGER_START)
-        android.os.Handler(executor.looper).postDelayed({
-            if (generation != afTapGeneration) return@postDelayed
-            triggerAutoFocus(android.hardware.camera2.CaptureRequest.CONTROL_AF_TRIGGER_CANCEL)
-            // The tapped window must go too: left in place, AE keeps metering that small patch and
-            // brightness jumps as the scene moves under it. A held exposure keeps its region.
-            controls = controls.copy(
-                afAuto = false,
-                afRegion = null,
-                aeRegion = if (controls.aeLock) controls.aeRegion else null,
-            )
-            issueRepeatingRequest()
-        }, AF_HOLD_MS)
-    }
-
-    private fun issueRepeatingRequest() {
+    internal fun issueRepeatingRequest() {
         val session = captureSession ?: return
         val surface = previewSurface ?: return
         if (stateMachine.state != SessionState.STREAMING) return
         val params = Camera2Controls.resolve(controls, snapshot)
         val targets = listOfNotNull(
-            surface, ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface,
+            surface, recorderSurface.takeIf { recordingTarget },
+            ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface,
         )
         runCatching {
             session.setRepeatingStreaming(params, targets, PreviewResultCallback { raw ->
@@ -816,6 +737,7 @@ class Camera2Session(
                 return
             }
             captureSession = session
+            configuredRecorderSurface = recorderSurface
             issueRepeatingRequest()
             previewSize?.let { listener?.onStreaming(it) }
         }

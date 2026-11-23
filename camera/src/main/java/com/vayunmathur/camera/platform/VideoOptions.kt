@@ -8,6 +8,8 @@ import com.vayunmathur.camera.domain.VideoFpsPolicy
 import com.vayunmathur.camera.domain.VideoStabilizationPolicy
 import com.vayunmathur.camera.platform.camera2.CharacteristicsFacade
 import com.vayunmathur.camera.platform.camera2.LensCharacteristicsSnapshot
+import com.vayunmathur.camera.platform.camera2.setIsoCap
+import com.vayunmathur.camera.platform.camera2.setVideoParams
 import com.vayunmathur.library.log.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -222,6 +224,8 @@ private val VIDEO_PREVIEW_MODES = setOf(CameraMode.VIDEO, CameraMode.TIMELAPSE, 
  */
 internal fun CameraViewModel.applyVideoPreviewParams() {
     val session = activeCamera2Session ?: return
+    // A take runs on this session: its frame rate and stabilization are fixed until it ends (applied then).
+    if (camera2RecordingState.sessionRecorder != null) return
     val mode = cameraModeMutable.value
     if (mode !in VIDEO_PREVIEW_MODES) {
         previewIsoCap.configure(null)

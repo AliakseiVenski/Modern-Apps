@@ -16,7 +16,7 @@ internal fun Camera2Session.configureSession(opened: DeviceHandle, gen: Long, re
     val surface = previewSurface ?: return
     if (transition(SessionEvent.CONFIGURE_REQUESTED) !is TransitionResult.Applied) return
     if (hdrPreview) {
-        runCatching { opened.createHdrCaptureSession(listOf(surface), SessionCallbackImpl(gen)) }.onFailure {
+        runCatching { opened.createHdrCaptureSession(listOfNotNull(surface, recorderSurface), SessionCallbackImpl(gen)) }.onFailure {
             dispatch(gen, SessionEvent.CONFIGURE_FAILED)
             reportError("createHdrCaptureSession failed: ${it.message}")
         }
@@ -131,7 +131,7 @@ internal fun Camera2Session.configureSession(opened: DeviceHandle, gen: Long, re
 
 /** Surfaces for one configure attempt: preview + every live output. */
 internal fun Camera2Session.configuredSurfaces(): List<Surface> = listOfNotNull(
-    previewSurface, stillOutput?.surface, ultraHdrOutput?.surface,
+    previewSurface, recorderSurface, stillOutput?.surface, ultraHdrOutput?.surface,
     ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface,
 )
 

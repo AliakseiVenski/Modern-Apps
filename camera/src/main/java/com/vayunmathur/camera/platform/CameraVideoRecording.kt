@@ -217,6 +217,14 @@ internal fun CameraViewModel.startRecording() {
             (if (plan.isoLimit > 0 && !plan.hdr) "  ISO<=${plan.isoLimit}" else ""),
     )
     val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision)
+    val recorderPlan = plan.toRecorderPlan()
+    val liveSession = activeCamera2Session
+    if (liveSession != null && sessionRecordingReady(recorderPlan)) {
+        startOnViewfinderSession(
+            liveSession, recorderPlan, config, controller, cacheFile, displayName, recordingMode, timestamp,
+        )
+        return
+    }
     val engine = Camera2VideoRecordingEngine(
         context = app,
         config = config,
@@ -275,7 +283,7 @@ private fun CameraViewModel.onVideoEngineError(e: Exception) {
 
 /** Stops the in-flight Camera2 recording (or cancels a pending start). */
 fun CameraViewModel.stopCamera2Recording() {
-    val engine = camera2RecordingState.engine
+    val engine: VideoRecordingEngine? = camera2RecordingState.engine ?: camera2RecordingState.sessionRecorder
     stopRecordingTimer()
     isRecordingMutable.value = false
     if (engine == null) {
@@ -295,11 +303,18 @@ private fun CameraViewModel.onCamera2RecordingFinalized(outcome: VideoRecordingO
     val displayName = camera2RecordingState.displayName ?: cacheFile.nameWithoutExtension
     val recordingMode = camera2RecordingState.mode ?: CameraMode.VIDEO
     val timestamp = camera2RecordingState.timestamp ?: ""
+    val wasSessionTake = camera2RecordingState.sessionRecorder != null
     camera2RecordingState.engine = null
+    camera2RecordingState.sessionRecorder = null
     camera2RecordingState.outputFile = null
     camera2RecordingState.previewTexture.value = null
     camera2RecordingMutable.value = false
     debug.reset()
+    // The take's encoder is spent: give the viewfinder session a fresh one for the next take.
+    if (wasSessionTake) {
+        rearmSessionRecorder()
+        applyVideoPreviewParams()
+    }
     if (outcome.error != null) {
         Log.error("Camera2Recorder", "Recording failed; discarding ${cacheFile.name}", outcome.error)
         cacheFile.delete()
@@ -391,6 +406,8 @@ fun CameraViewModel.togglePauseRecording() {
  */
 fun CameraViewModel.toggleMicMuted() {
     micMutedMutable.value = !micMutedMutable.value
+    // A take on the viewfinder session mutes live (the track carries silence); the engine path decides at start.
+    camera2RecordingState.prepared?.core?.audioMuted = micMutedMutable.value
     if (camera2RecordingState.engine != null) {
         Log.status("CameraViewModel", "Mic mute applies from the next recording on the Camera2 path")
     }
@@ -404,7 +421,8 @@ fun CameraViewModel.toggleMicMuted() {
  * so this is a defensive no-op then.
  */
 fun CameraViewModel.captureVideoSnapshot() {
-    if (isCapturingMutable.value || camera2RecordingState.engine != null) return
+    if (isCapturingMutable.value || camera2RecordingState.engine != null ||
+        camera2RecordingState.sessionRecorder != null) return
     val session = activeCamera2Session ?: return
     session.capture(
         mirrored = mirrorCaptures,
@@ -458,5 +476,57 @@ internal fun CameraViewModel.finishPanoramaSweep() {
         }
         panoramaEngine.reset()
         isFinishingPano = false
+    }
+}
+
+/**
+ * Starts a take on the live viewfinder session: its encoder surface is already a session output, so the
+ * camera stays open and the viewfinder keeps running. [config] carries the per-take fields (audio
+ * device, orientation); the video format was fixed when the encoder was prepared.
+ */
+private fun CameraViewModel.startOnViewfinderSession(
+    session: com.vayunmathur.camera.platform.camera2.Camera2Session,
+    plan: RecorderPlan,
+    config: CustomRecordingConfig,
+    controller: com.vayunmathur.camera.domain.LiveBitrateController,
+    cacheFile: java.io.File,
+    displayName: String,
+    recordingMode: CameraMode,
+    timestamp: String,
+) {
+    val prepared = camera2RecordingState.prepared ?: return
+    val core = prepared.core
+    // A muted mic still records its track (silence), so unmuting mid-take works.
+    val audioForMode = recordingMode == CameraMode.VIDEO || recordingMode == CameraMode.CINEMATIC
+    core.applyTakeConfig(config.copy(audioEnabled = audioForMode))
+    core.audioMuted = micMutedMutable.value
+    prepared.taken = true
+    val recorder = SessionVideoRecorder(
+        core = core,
+        controller = controller,
+        motionSupplier = { sceneMotionEstimator.lastClassification },
+        session = session,
+    )
+    camera2RecordingState.sessionRecorder = recorder
+    camera2RecordingState.sessionPlan = plan
+    camera2RecordingState.outputFile = cacheFile
+    camera2RecordingState.displayName = displayName
+    camera2RecordingState.mode = recordingMode
+    camera2RecordingState.timestamp = timestamp
+    try {
+        recorder.start(VideoRecordingRequest(cacheFile, audioEnabled = audioForMode)) { outcome ->
+            onCamera2RecordingFinalized(outcome)
+        }
+        isRecordingMutable.value = true
+        startRecordingTimer()
+    } catch (e: Exception) {
+        Log.error("SessionRecorder", "Recording on the viewfinder session failed to start", e)
+        camera2RecordingState.sessionRecorder = null
+        debug.reset()
+        cacheFile.delete()
+        com.vayunmathur.library.util.AppMessages.show(
+            app.getString(com.vayunmathur.camera.R.string.camera_recording_failed)
+        )
+        rearmSessionRecorder()
     }
 }

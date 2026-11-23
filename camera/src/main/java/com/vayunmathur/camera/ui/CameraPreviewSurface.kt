@@ -5,10 +5,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.vayunmathur.camera.platform.RecorderPlan
+import com.vayunmathur.camera.platform.SessionRecorderBinding
+import com.vayunmathur.camera.platform.recorderPlan
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import com.vayunmathur.camera.platform.hdrSupported
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -101,12 +107,27 @@ internal fun CameraPreviewSurface(
         // Guard: never compose with empty cameraId — fall back to CameraX black/error branch below.
         val camera2Id = state.selectedLens?.logicalCameraId.orEmpty()
         if (camera2Id.isNotEmpty()) {
+            val isVideo = state.isVideoType
             val tuning by viewModel.videoTuning.collectAsState()
-            val hdrPreview = state.isVideoType && tuning.hdr &&
-                remember(camera2Id) { viewModel.hdrSupported(camera2Id) }
+            val bindSettings by viewModel.bindTimeSettings.collectAsState()
+            // The encoder's format is part of the viewfinder session, so the plan is read once per
+            // setting change and frozen while a take runs (settings changed mid-take apply afterwards).
+            var plannedRecorder by remember(isVideo) { mutableStateOf<RecorderPlan?>(null) }
+            var planLoaded by remember(isVideo) { mutableStateOf(!isVideo) }
+            LaunchedEffect(state.cameraMode, tuning, bindSettings.videoCodec, state.selectedLens, state.isRecording) {
+                if (!isVideo || state.isRecording) return@LaunchedEffect
+                plannedRecorder = withContext(Dispatchers.Default) { viewModel.recorderPlan(state.cameraMode) }
+                planLoaded = true
+            }
+            if (!planLoaded) {
+                Box(modifier = previewModifier.background(Color.Black))
+                return
+            }
+            val recorder = remember(plannedRecorder) { plannedRecorder?.let { SessionRecorderBinding(viewModel, it) } }
             Camera2Preview(
-                hdrPreview = hdrPreview,
-                videoPreview = state.isVideoType,
+                hdrPreview = isVideo && plannedRecorder?.hdr == true,
+                videoPreview = isVideo,
+                recorder = recorder,
                 cameraId = camera2Id,
                 lensFacing = state.selectedLens?.facing,
                 zoomRatio = state.zoomRatio,

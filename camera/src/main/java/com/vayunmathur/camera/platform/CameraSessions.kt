@@ -55,7 +55,7 @@ fun CameraViewModel.teardownSession() {
     sessionTeardownCount++
     // Stop any in-flight Camera2 recordings: a rebind across a live
     // recording would otherwise leave its engine owning a closed camera.
-    if (camera2RecordingState.engine != null) {
+    if (camera2RecordingState.engine != null || camera2RecordingState.sessionRecorder != null) {
         stopCamera2Recording()
     }
     if (camera2RecordingState.sloMoControl != null && isRecordingMutable.value) {

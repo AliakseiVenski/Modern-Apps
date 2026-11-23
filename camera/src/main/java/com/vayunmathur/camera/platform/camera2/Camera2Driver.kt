@@ -277,9 +277,20 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
     set(CaptureRequest.EDGE_MODE, params.edgeMode)
     params.tonemapMode?.let { set(CaptureRequest.TONEMAP_MODE, it) }
     params.videoFps?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, android.util.Range(it, it)) }
-    params.videoStabilizationMode?.let { set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it) }
-    if (params.opticalStabilization) {
-        set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON)
+    if (params.videoFps != null) {
+        // Video viewfinder: say OFF explicitly, the record template's default may stabilize on its own.
+        set(
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+            params.videoStabilizationMode ?: CameraMetadata.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
+        )
+        set(
+            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+            if (params.opticalStabilization) {
+                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
+            } else {
+                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_OFF
+            },
+        )
     }
     if (params.afRegions.isNotEmpty()) {
         set(

@@ -90,6 +90,8 @@ internal fun Camera2Preview(
     hdrPreview: Boolean = false,
     /** Video modes: lean preview-only session with the record template, so stabilization works live. */
     videoPreview: Boolean = false,
+    /** Video modes: the encoder the session is configured with, so recording starts on this viewfinder. */
+    recorder: com.vayunmathur.camera.platform.SessionRecorderBinding? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -112,9 +114,10 @@ internal fun Camera2Preview(
         Box(modifier = modifier.background(Color.Black))
         return
     }
-    val sessionHolder = remember(lensFacing, hdrPreview, videoPreview) {
+    val sessionHolder = remember(lensFacing, hdrPreview, videoPreview, recorder) {
         Camera2PreviewSession(
             context, lensFacing, onError, if (hdrPreview) null else analysisConsumer, hdrPreview, videoPreview,
+            recorder,
         )
     }
     if (hdrPreview) {

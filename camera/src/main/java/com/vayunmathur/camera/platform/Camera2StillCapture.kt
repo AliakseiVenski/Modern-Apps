@@ -45,6 +45,10 @@ import kotlinx.coroutines.withContext
 
 /** Registers the live gated Camera2 session (null when it leaves composition). */
 internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
+    // A take is bound to the session it started on: if that session is replaced or closed, end the take.
+    camera2RecordingState.sessionRecorder?.let { recorder ->
+        if (recorder.session !== session) stopCamera2Recording()
+    }
     activeCamera2Session = session
     if (session != null) {
         session.previewFrameObserver = { raw ->

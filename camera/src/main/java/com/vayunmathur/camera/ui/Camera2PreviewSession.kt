@@ -39,6 +39,8 @@ internal class Camera2PreviewSession(
     private val analysisConsumer: com.vayunmathur.camera.platform.camera2.AnalysisConsumer? = null,
     private val hdrPreview: Boolean = false,
     private val videoPreview: Boolean = false,
+    /** Video modes: supplies the encoder surface the session is configured with, so a take starts on it. */
+    private val recorder: com.vayunmathur.camera.platform.SessionRecorderBinding? = null,
 ) {
     val executor = Camera2Executor("Camera2Preview-${lensFacing?.name ?: "unknown"}")
 
@@ -185,13 +187,19 @@ internal class Camera2PreviewSession(
             manager,
             android.os.Handler(executor.looper),
         )
+        // Video viewfinder ladder: 0 = analysis + encoder, 1 = encoder only, 2 = analysis only (the take
+        // then falls back to the engine that reopens the camera), 3 = neither.
+        val withRecorder = videoPreview && profileIndex < RECORDER_MAX_PROFILE && recorder != null
+        val withAnalysis = if (videoPreview) profileIndex != 1 && profileIndex < 3 else profileIndex < 3
+        val recorderSurface = if (withRecorder) recorder?.prepare() else null
         return Camera2Session(
             driver = driver,
             executor = executor,
             snapshot = snapshot,
             ringConfig = ReprocessRingConfig(enabled = profileIndex < 2 && ReprocessRingGate.ENABLED),
             rawRingConfig = RawRingConfig(enabled = profileIndex < 1 && RawRingGate.ENABLED),
-            analysisConsumer = if (profileIndex < 3) analysisConsumer else null,
+            analysisConsumer = if (withAnalysis) analysisConsumer else null,
+            initialRecorderSurface = recorderSurface,
             ultraHdrEnabled = profileIndex < 1,
             hdrPreview = hdrPreview,
             videoPreview = videoPreview,
@@ -283,7 +291,7 @@ internal class Camera2PreviewSession(
         get() {
             val updated = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }
                 .getOrDefault(0L)
-            return "${lensFacing?.name}_${if (videoPreview) "video" else "photo"}_$updated"
+            return "${lensFacing?.name}_${if (videoPreview) "video2" else "photo"}_$updated"
         }
 
     /** Profile that streamed last time on this lens, so a HAL that rejects the richer ones is not probed every launch. */
@@ -306,12 +314,15 @@ internal class Camera2PreviewSession(
         closed = true
         session?.close()
         session = null
+        // After the session: its encoder output must not vanish under an open capture session.
+        recorder?.release()
         executor.shutdown()
     }
 
     private companion object {
         /** Last degrade rung (preview + JPEG only). */
         const val MAX_PROFILE_INDEX = 3
+        const val RECORDER_MAX_PROFILE = 2
         const val RETRY_DELAY_MS = 500L
         const val DEGRADE_DELAY_MS = 1000L
     }
