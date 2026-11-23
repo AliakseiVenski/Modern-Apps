@@ -55,6 +55,9 @@ private fun CameraViewModel.loadCaptureSettings() {
     videoTuningMutable.value = VideoTuning(
         fps = ds.getString("camera_video_fps")?.toIntOrNull() ?: 0,
         stabilizationEnabled = ds.getString("camera_video_stabilization")?.toBoolean() ?: true,
+        quality = ds.getString("camera_video_quality")?.takeIf { it.isNotBlank() },
+        hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: false,
+        isoLimit = ds.getString("camera_video_iso_limit")?.toIntOrNull() ?: 0,
     )
     ds.getString("camera_custom_zoom_levels")?.let { raw ->
         customZoomLevelsMutable.value = raw.split(",")
@@ -195,6 +198,27 @@ fun CameraViewModel.setVideoFps(fps: Int) {
     videoTuningMutable.update { it.copy(fps = fps) }
     applyVideoPreviewParams()
     viewModelScope.launch { ds.setString("camera_video_fps", fps.toString()) }
+}
+
+/** Recording resolution as a `VideoQualityTier` name; null = best that works. */
+fun CameraViewModel.setVideoQuality(name: String?) {
+    videoTuningMutable.update { it.copy(quality = name) }
+    applyVideoPreviewParams()
+    viewModelScope.launch { ds.setString("camera_video_quality", name ?: "") }
+}
+
+/** 10-bit HLG recording on/off. */
+fun CameraViewModel.setVideoHdr(enabled: Boolean) {
+    videoTuningMutable.update { it.copy(hdr = enabled) }
+    applyVideoPreviewParams()
+    viewModelScope.launch { ds.setString("camera_video_hdr", enabled.toString()) }
+}
+
+/** Highest ISO the camera may use while filming; 0 = no cap. */
+fun CameraViewModel.setVideoIsoLimit(iso: Int) {
+    videoTuningMutable.update { it.copy(isoLimit = iso) }
+    applyVideoPreviewParams()
+    viewModelScope.launch { ds.setString("camera_video_iso_limit", iso.toString()) }
 }
 
 fun CameraViewModel.setVideoStabilizationEnabled(enabled: Boolean) {

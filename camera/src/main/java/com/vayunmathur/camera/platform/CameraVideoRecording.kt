@@ -184,6 +184,9 @@ internal fun CameraViewModel.startRecording() {
         audioInputDevice = bindTimeSettings.value.audioInputDevice,
         stabilizationMode = stabilization.videoMode,
         opticalStabilization = stabilization.opticalOn,
+        hdr = plan.hdr,
+        isoLimit = plan.isoLimit,
+        isoMin = cameraSnapshot0?.second?.sensitivityRange?.lower ?: 50,
     )
     debug.reset()
     debug.bind.value = VideoBindSummary(
@@ -195,7 +198,9 @@ internal fun CameraViewModel.startRecording() {
         },
         fpsTarget = fps,
         bitrateMbps = decision.bitrateBps / BITS_PER_MEGABIT,
-        stabilization = stabilizationLabel(stabilization),
+        stabilization = stabilizationLabel(stabilization) +
+            (if (plan.hdr) "  HLG" else "") +
+            (if (plan.isoLimit > 0 && !plan.hdr) "  ISO<=${plan.isoLimit}" else ""),
     )
     val controller = com.vayunmathur.camera.domain.LiveBitrateController(decision)
     val engine = Camera2VideoRecordingEngine(

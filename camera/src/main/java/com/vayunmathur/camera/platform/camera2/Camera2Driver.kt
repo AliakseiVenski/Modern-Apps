@@ -229,6 +229,13 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
         set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         params.manualExposureTimeNs?.let { set(CaptureRequest.SENSOR_EXPOSURE_TIME, it) }
         params.manualSensitivityIso?.let { set(CaptureRequest.SENSOR_SENSITIVITY, it) }
+    } else if (params.isoCapTimeNs != null && params.isoCapIso != null) {
+        // Video ISO cap: AE off at one frame of shutter, so the frame duration must be pinned too
+        // (a fixed fps range does nothing without AE).
+        set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
+        set(CaptureRequest.SENSOR_EXPOSURE_TIME, params.isoCapTimeNs)
+        set(CaptureRequest.SENSOR_SENSITIVITY, params.isoCapIso)
+        set(CaptureRequest.SENSOR_FRAME_DURATION, 1_000_000_000L / (params.videoFps ?: 30))
     } else {
         set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
     }

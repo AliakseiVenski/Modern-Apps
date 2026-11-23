@@ -38,6 +38,9 @@ data class Camera2ControlState(
     val videoFps: Int? = null,
     val videoStabilizationMode: Int? = null,
     val opticalStabilization: Boolean = false,
+    /** Exposure picked by the video ISO cap (AE off); a manual exposure from the user wins over it. */
+    val isoCapTimeNs: Long? = null,
+    val isoCapIso: Int? = null,
 ) {
     companion object {
         val DEFAULT = Camera2ControlState()
@@ -73,6 +76,8 @@ data class ResolvedRequestParams(
     val videoFps: Int? = null,
     val videoStabilizationMode: Int? = null,
     val opticalStabilization: Boolean = false,
+    val isoCapTimeNs: Long? = null,
+    val isoCapIso: Int? = null,
 )
 
 object Camera2Controls {
@@ -154,6 +159,8 @@ object Camera2Controls {
             videoFps = state.videoFps,
             videoStabilizationMode = state.videoStabilizationMode,
             opticalStabilization = state.opticalStabilization,
+            isoCapTimeNs = state.isoCapTimeNs,
+            isoCapIso = state.isoCapIso,
         )
     }
 

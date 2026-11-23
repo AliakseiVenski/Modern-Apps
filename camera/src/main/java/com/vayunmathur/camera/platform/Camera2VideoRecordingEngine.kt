@@ -11,10 +11,13 @@ import android.hardware.camera2.CaptureRequest
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
+import com.vayunmathur.camera.domain.ExposureSetting
 import com.vayunmathur.camera.domain.LiveBitrateController
+import com.vayunmathur.camera.domain.ShutterPriorityController
 import com.vayunmathur.camera.domain.SceneMotion
 import com.vayunmathur.camera.platform.camera2.RecordingSessionOwnership
 import com.vayunmathur.library.log.Log
@@ -60,6 +63,16 @@ data class CustomRecordingConfig(
     val stabilizationMode: Int? = null,
     /** Also request `LENS_OPTICAL_STABILIZATION_MODE_ON` (OIS under the electronic stabilization). */
     val opticalStabilization: Boolean = false,
+    /**
+     * Record 10-bit HLG: HEVC Main10 with BT.2020/HLG tags, and the encoder and preview outputs in the
+     * HLG10 camera dynamic-range profile (API 33). No analysis stream is attached (an 8-bit YUV stream
+     * cannot share the session), so motion-adaptive bitrate and the ISO cap sit idle.
+     */
+    val hdr: Boolean = false,
+    /** Highest ISO the camera may use (0 = no cap): software AE keeps 1/fps shutter and moves ISO up to this. */
+    val isoLimit: Int = 0,
+    /** Lowest ISO of the lens, the floor of the ISO cap controller. */
+    val isoMin: Int = 50,
 )
 
 /** Read-back summary of a finished file (see [Camera2VideoRecordingEngine.validateOutput]). */
@@ -110,6 +123,13 @@ class Camera2VideoRecordingEngine(
     private var previousGrid: FloatArray? = null
     private var previousGridWidth = 0
     private var lastAnalysisAtMs = 0L
+
+    /** The live repeating request, kept so the ISO cap can re-issue it with a new exposure. */
+    private var requestBuilder: CaptureRequest.Builder? = null
+
+    /** Software AE behind the ISO cap; null when no cap is set (or HDR, which has no brightness meter). */
+    private var isoController: ShutterPriorityController? = null
+    private var lastLumaAtMs = 0L
 
     /** The engine-owned preview surface (for a TextureView to render), once started. */
     fun ownedPreviewSurface(): Surface? = ownedPreviewSurface
@@ -252,81 +272,89 @@ class Camera2VideoRecordingEngine(
             Surface(texture).also { ownedPreviewSurface = it }
         }
         // Analysis surface: same motion signal as the CameraX path, from an
-        // ImageReader feeding the shared estimator through onMotionSample.
-        val reader = android.media.ImageReader.newInstance(
-            ANALYSIS_WIDTH, ANALYSIS_HEIGHT, android.graphics.ImageFormat.YUV_420_888, ANALYSIS_MAX_IMAGES
-        )
+        // ImageReader feeding the shared estimator through onMotionSample, and
+        // the brightness meter of the ISO cap. HDR records without it: an 8-bit
+        // YUV stream cannot share an HLG10 session.
+        val reader = if (config.hdr) {
+            null
+        } else {
+            android.media.ImageReader.newInstance(
+                ANALYSIS_WIDTH, ANALYSIS_HEIGHT, android.graphics.ImageFormat.YUV_420_888, ANALYSIS_MAX_IMAGES
+            )
+        }
         analysisReader = reader
-        reader.setOnImageAvailableListener({ r ->
-            val nowMs = android.os.SystemClock.elapsedRealtime()
-            if (nowMs - lastAnalysisAtMs < VIDEO_MOTION_SAMPLE_INTERVAL_MS) {
-                runCatching { r.acquireLatestImage()?.close() }
-                return@setOnImageAvailableListener
-            }
-            lastAnalysisAtMs = nowMs
-            val image = try {
-                r.acquireLatestImage()
-            } catch (_: IllegalStateException) {
-                null
-            } ?: return@setOnImageAvailableListener
-            try {
-                val plane = image.planes.firstOrNull() ?: return@setOnImageAvailableListener
-                val (grid, gridWidth) = sampleYPlaneGrid(
-                    plane.buffer, plane.rowStride, plane.pixelStride, image.width, image.height
-                ) ?: return@setOnImageAvailableListener
-                val previous = previousGrid
-                previousGrid = grid
-                if (previous != null && previous.size == grid.size && previousGridWidth == gridWidth) {
-                    com.vayunmathur.camera.domain.SceneMotionMath
-                        .sample(previous, grid, gridWidth)
-                        ?.let { onMotionSample(it) }
+        reader?.setOnImageAvailableListener({ r -> onAnalysisFrame(r) }, cameraHandler)
+        isoController = if (config.isoLimit > 0 && !config.hdr) {
+            val frameNanos = NANOS_PER_SECOND / config.captureFps
+            val isoMin = config.isoMin.coerceAtMost(config.isoLimit)
+            ShutterPriorityController(
+                frameNanos, isoMin, config.isoLimit,
+                ExposureSetting(frameNanos, ISO_CAP_SEED_ISO.coerceIn(isoMin, config.isoLimit)),
+            )
+        } else {
+            null
+        }
+        val sessionCallback = object : CameraCaptureSession.StateCallback() {
+            override fun onConfigured(session: CameraCaptureSession) {
+                captureSession = session
+                core.markSessionStreaming()
+                try {
+                    val device = cameraDevice ?: return
+                    val builder = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+                        addTarget(encoderSurface)
+                        addTarget(effectivePreview)
+                        reader?.let { addTarget(it.surface) }
+                        set(
+                            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                            android.util.Range(config.captureFps, config.captureFps)
+                        )
+                        config.stabilizationMode?.let {
+                            set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it)
+                        }
+                        if (config.opticalStabilization) {
+                            set(
+                                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                                CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
+                            )
+                        }
+                    }
+                    requestBuilder = builder
+                    isoController?.let { applyExposure(builder, it.current) }
+                    session.setRepeatingRequest(builder.build(), frameResultCallback(), cameraHandler)
+                } catch (e: IllegalStateException) {
+                    // Device closed under us (a competing
+                    // session took the camera): surface as an
+                    // engine error, never an uncaught crash.
+                    onError(e)
                 }
-                previousGridWidth = gridWidth
-            } finally {
-                image.close()
             }
-        }, cameraHandler)
+
+            override fun onConfigureFailed(session: CameraCaptureSession) {
+                onError(IllegalStateException("Custom recorder capture session failed to configure"))
+            }
+        }
         manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
             override fun onOpened(device: CameraDevice) {
                 cameraDevice = device
                 try {
-                    val surfaces = listOfNotNull(encoderSurface, effectivePreview, reader.surface)
-                    device.createCaptureSession(surfaces, object : CameraCaptureSession.StateCallback() {
-                        override fun onConfigured(session: CameraCaptureSession) {
-                            captureSession = session
-                            core.markSessionStreaming()
-                            try {
-                                val request = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                                    addTarget(encoderSurface)
-                                    addTarget(effectivePreview)
-                                    addTarget(reader.surface)
-                                    set(
-                                        CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                                        android.util.Range(config.captureFps, config.captureFps)
-                                    )
-                                    config.stabilizationMode?.let {
-                                        set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, it)
-                                    }
-                                    if (config.opticalStabilization) {
-                                        set(
-                                            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-                                            CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON
-                                        )
-                                    }
-                                }.build()
-                                session.setRepeatingRequest(request, frameResultCallback(), cameraHandler)
-                            } catch (e: IllegalStateException) {
-                                // Device closed under us (a competing
-                                // session took the camera): surface as an
-                                // engine error, never an uncaught crash.
-                                onError(e)
+                    if (config.hdr && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val outputs = listOf(encoderSurface, effectivePreview).map { surface ->
+                            android.hardware.camera2.params.OutputConfiguration(surface).apply {
+                                dynamicRangeProfile = android.hardware.camera2.params.DynamicRangeProfiles.HLG10
                             }
                         }
-
-                        override fun onConfigureFailed(session: CameraCaptureSession) {
-                            onError(IllegalStateException("Custom recorder capture session failed to configure"))
-                        }
-                    }, cameraHandler)
+                        device.createCaptureSession(
+                            android.hardware.camera2.params.SessionConfiguration(
+                                android.hardware.camera2.params.SessionConfiguration.SESSION_REGULAR,
+                                outputs,
+                                { task -> cameraHandler?.post(task) },
+                                sessionCallback,
+                            )
+                        )
+                    } else {
+                        val surfaces = listOfNotNull(encoderSurface, effectivePreview, reader?.surface)
+                        device.createCaptureSession(surfaces, sessionCallback, cameraHandler)
+                    }
                 } catch (e: IllegalStateException) {
                     onError(e)
                 } catch (e: IllegalArgumentException) {
@@ -350,6 +378,66 @@ class Camera2VideoRecordingEngine(
         val facing = manager.getCameraCharacteristics(cameraId)
             .get(CameraCharacteristics.LENS_FACING)
         Log.debug("Camera2Recorder", "opening camera $cameraId facing=$facing")
+    }
+
+    /** Analysis frame: brightness for the ISO cap at ~20 Hz, scene motion for adaptive bitrate at ~5 Hz. */
+    private fun onAnalysisFrame(r: android.media.ImageReader) {
+        val image = try {
+            r.acquireLatestImage()
+        } catch (_: IllegalStateException) {
+            null
+        } ?: return
+        try {
+            val nowMs = android.os.SystemClock.elapsedRealtime()
+            val lumaDue = isoController != null && nowMs - lastLumaAtMs >= LUMA_INTERVAL_MS
+            val motionDue = nowMs - lastAnalysisAtMs >= VIDEO_MOTION_SAMPLE_INTERVAL_MS
+            if (!lumaDue && !motionDue) return
+            val plane = image.planes.firstOrNull() ?: return
+            val (grid, gridWidth) = sampleYPlaneGrid(
+                plane.buffer, plane.rowStride, plane.pixelStride, image.width, image.height
+            ) ?: return
+            if (lumaDue) {
+                val sinceMs = if (lastLumaAtMs == 0L) LUMA_INTERVAL_MS else nowMs - lastLumaAtMs
+                lastLumaAtMs = nowMs
+                isoController
+                    ?.update(grid.average(), sinceMs.coerceAtMost(LUMA_MAX_GAP_MS) / 1000.0)
+                    ?.let { applyExposureLive(it) }
+            }
+            if (motionDue) {
+                lastAnalysisAtMs = nowMs
+                val previous = previousGrid
+                previousGrid = grid
+                if (previous != null && previous.size == grid.size && previousGridWidth == gridWidth) {
+                    com.vayunmathur.camera.domain.SceneMotionMath
+                        .sample(previous, grid, gridWidth)
+                        ?.let { onMotionSample(it) }
+                }
+                previousGridWidth = gridWidth
+            }
+        } finally {
+            image.close()
+        }
+    }
+
+    /** Manual exposure at one frame of shutter and a fixed frame duration: AE off, so ISO is ours to move. */
+    private fun applyExposure(builder: CaptureRequest.Builder, setting: ExposureSetting) {
+        builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
+        builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, setting.timeNanos)
+        builder.set(CaptureRequest.SENSOR_SENSITIVITY, setting.iso)
+        builder.set(CaptureRequest.SENSOR_FRAME_DURATION, NANOS_PER_SECOND / config.captureFps)
+    }
+
+    private fun applyExposureLive(setting: ExposureSetting) {
+        val builder = requestBuilder ?: return
+        val session = captureSession ?: return
+        applyExposure(builder, setting)
+        try {
+            session.setRepeatingRequest(builder.build(), frameResultCallback(), cameraHandler)
+        } catch (e: IllegalStateException) {
+            Log.status("Camera2Recorder", "ISO cap update skipped: session closed", e)
+        } catch (e: android.hardware.camera2.CameraAccessException) {
+            Log.status("Camera2Recorder", "ISO cap update failed", e)
+        }
     }
 
     /** Capture callback feeding [onFrameResult]; null when nobody listens, so no per-frame work is queued. */
@@ -407,6 +495,8 @@ class Camera2VideoRecordingEngine(
         }
         previewTextureBorrowed = false
         analysisReader = null
+        requestBuilder = null
+        isoController = null
         ownedPreviewSurface = null
         ownedPreviewTexture = null
         previousGrid = null
@@ -420,6 +510,12 @@ class Camera2VideoRecordingEngine(
         private const val ANALYSIS_WIDTH = 640
         private const val ANALYSIS_HEIGHT = 480
         private const val ANALYSIS_MAX_IMAGES = 3
+        private const val NANOS_PER_SECOND = 1_000_000_000L
+
+        /** Brightness meter cadence of the ISO cap: small, frequent exposure steps read as a smooth ramp. */
+        private const val LUMA_INTERVAL_MS = 50L
+        private const val LUMA_MAX_GAP_MS = 200L
+        private const val ISO_CAP_SEED_ISO = 400
 
         /**
          * Read-back validation for a finished custom-path file: the extractor

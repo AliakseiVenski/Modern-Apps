@@ -41,6 +41,22 @@ object CodecSupport {
     /** The Recorder can encode HEVC/H.265 (`video/hevc`) on this device. */
     val isHevcEncoderAvailable: Boolean by lazy { supports(MediaFormat.MIMETYPE_VIDEO_HEVC) }
 
+    /** Some HEVC encoder lists the 10-bit Main10 profile (needed for HLG recording). */
+    val isHevcMain10EncoderAvailable: Boolean by lazy {
+        try {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .filter { it.isEncoder && it.supportedTypes.any { t -> t.equals(MediaFormat.MIMETYPE_VIDEO_HEVC, true) } }
+                .any { info ->
+                    info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_HEVC).profileLevels.any {
+                        it.profile == android.media.MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10 ||
+                            it.profile == android.media.MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10
+                    }
+                }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /**
      * An Opus (`audio/opus`) encoder exists on this device. Opus is the
      * only audio encoding the recording core will ever use (see

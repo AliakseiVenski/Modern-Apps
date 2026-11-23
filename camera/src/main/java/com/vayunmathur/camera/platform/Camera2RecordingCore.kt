@@ -124,6 +124,12 @@ class Camera2RecordingCore(
                     setInteger(MediaFormat.KEY_CAPTURE_RATE, config.captureFps)
                 }
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, config.iFrameIntervalSec)
+                if (config.hdr) {
+                    setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10)
+                    setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT2020)
+                    setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_HLG)
+                    setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+                }
             }
         videoCodec = MediaCodec.createEncoderByType(config.videoMime).apply {
             configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)

@@ -16,12 +16,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vayunmathur.camera.R
 import com.vayunmathur.camera.data.setVideoFps
+import com.vayunmathur.camera.data.setVideoHdr
+import com.vayunmathur.camera.data.setVideoIsoLimit
+import com.vayunmathur.camera.data.setVideoQuality
 import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.refreshVideoOptions
 import com.vayunmathur.library.ui.DropdownMenu
 import com.vayunmathur.library.ui.IconArrowDropDown
 import com.vayunmathur.library.ui.IconCheck
+import com.vayunmathur.library.ui.MaterialTheme
 import com.vayunmathur.library.ui.OutlinedButton
 import com.vayunmathur.library.ui.SelectableDropdownMenuItem
 import com.vayunmathur.library.ui.SettingsSection
@@ -39,6 +43,17 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
     LaunchedEffect(Unit) { viewModel.refreshVideoOptions() }
     val opts = options ?: return
     val auto = stringResource(R.string.settings_video_auto)
+
+    if (opts.qualities.isNotEmpty()) {
+        val labels = videoQualityLabels()
+        SettingsSection(title = stringResource(R.string.settings_video_resolution)) {
+            ChoiceDropdown(
+                choices = listOf<Pair<String?, String>>(null to auto) + opts.qualities.map { it to labels.getValue(it) },
+                selected = tuning.quality,
+                onSelect = { viewModel.setVideoQuality(it) },
+            )
+        }
+    }
 
     if (opts.fps.isNotEmpty()) {
         SettingsSection(title = stringResource(R.string.settings_video_fps)) {
@@ -59,7 +74,42 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
             )
         }
     }
+
+    if (opts.hdrSupported) {
+        SettingsSection(title = stringResource(R.string.settings_video_hdr)) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_video_hdr_description),
+                checked = tuning.hdr,
+                onCheckedChange = { viewModel.setVideoHdr(it) },
+            )
+        }
+    }
+
+    val isoChoices = opts.isoStops.dropLast(1)
+    if (isoChoices.isNotEmpty()) {
+        SettingsSection(title = stringResource(R.string.settings_video_iso_limit)) {
+            Text(
+                stringResource(R.string.settings_video_iso_limit_description),
+                modifier = Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            ChoiceDropdown(
+                choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
+                    isoChoices.map { it to stringResource(R.string.settings_iso_value, it) },
+                selected = tuning.isoLimit,
+                onSelect = { viewModel.setVideoIsoLimit(it) },
+            )
+        }
+    }
 }
+
+/** Labels for the resolution tiers a lens offers (shared with the viewfinder quick panel). */
+@Composable
+internal fun videoQualityLabels(): Map<String, String> = mapOf(
+    "UHD" to stringResource(R.string.video_quality_uhd),
+    "FHD" to stringResource(R.string.video_quality_fhd),
+    "HD" to stringResource(R.string.video_quality_hd),
+)
 
 /** Outlined-button dropdown over (value, label) pairs. */
 @Composable

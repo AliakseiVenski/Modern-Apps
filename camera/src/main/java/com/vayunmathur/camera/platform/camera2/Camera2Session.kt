@@ -217,6 +217,14 @@ class Camera2Session(
         }
     }
 
+    /** Video ISO cap exposure (AE off); nulls return to AE. Fed ~20 Hz by the preview's brightness meter. */
+    fun setIsoCap(timeNs: Long?, iso: Int?) {
+        executor.execute {
+            controls = controls.copy(isoCapTimeNs = timeNs, isoCapIso = iso)
+            issueRepeatingRequest()
+        }
+    }
+
     /** Post-processing toggles (#662); preview + stills inherit them. */
     fun setPostProcessing(noiseReductionHighQuality: Boolean, edgeHighQuality: Boolean) {
         executor.execute {

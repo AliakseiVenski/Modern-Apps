@@ -97,7 +97,8 @@ internal fun Camera2Preview(
         rebuildScope.launch {
             // The HAL unregisters the device for a moment after a
             // configure death; give it time to come back before reopening.
-            kotlinx.coroutines.delay(4000)
+            // A first failure retries the same profile quickly (cold HAL).
+            kotlinx.coroutines.delay(sessionHolder.nextRebuildDelayMs)
             if (sessionHolder.isClosedForRebuild()) return@launch
             val rebuilt = sessionHolder.rebuildNext()
             session = rebuilt

@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.vayunmathur.camera.R
 import com.vayunmathur.camera.data.setDebugOverlay
 import com.vayunmathur.camera.data.setVideoFps
+import com.vayunmathur.camera.data.setVideoHdr
+import com.vayunmathur.camera.data.setVideoIsoLimit
+import com.vayunmathur.camera.data.setVideoQuality
 import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.refreshVideoOptions
@@ -68,7 +73,7 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
         ) {
             Column(
-                modifier = Modifier.padding(18.dp),
+                modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
@@ -77,6 +82,17 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
+
+                if (opts != null && opts.qualities.isNotEmpty()) {
+                    val labels = videoQualityLabels()
+                    PillRow(
+                        title = stringResource(R.string.settings_video_resolution),
+                        choices = listOf<Pair<String?, String>>(null to auto) +
+                            opts.qualities.map { it to labels.getValue(it) },
+                        selected = tuning.quality,
+                        onSelect = { viewModel.setVideoQuality(it) },
+                    )
+                }
 
                 if (opts != null && opts.fps.isNotEmpty()) {
                     PillRow(
@@ -95,6 +111,26 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                         checked = tuning.stabilizationEnabled,
                         onCheckedChange = { viewModel.setVideoStabilizationEnabled(it) },
                         leading = { IconSettings(Modifier.size(22.dp), Color.White) },
+                    )
+                }
+
+                if (opts?.hdrSupported == true) {
+                    ToggleCard(
+                        title = stringResource(R.string.settings_video_hdr),
+                        subtitle = stringResource(R.string.settings_video_hdr_short),
+                        checked = tuning.hdr,
+                        onCheckedChange = { viewModel.setVideoHdr(it) },
+                    )
+                }
+
+                val isoChoices = opts?.isoStops.orEmpty().dropLast(1)
+                if (isoChoices.isNotEmpty()) {
+                    PillRow(
+                        title = stringResource(R.string.settings_video_iso_limit),
+                        choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
+                            isoChoices.map { it to it.toString() },
+                        selected = tuning.isoLimit,
+                        onSelect = { viewModel.setVideoIsoLimit(it) },
                     )
                 }
 

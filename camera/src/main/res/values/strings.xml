@@ -98,6 +98,20 @@
     <string name="settings_video_stabilization_short" tools:ignore="MissingTranslation">EIS on top of OIS where available</string>
     <!-- Viewfinder quick panel: title -->
     <string name="quick_menu_title" tools:ignore="MissingTranslation">Video</string>
+    <!-- Resolution picker -->
+    <string name="settings_video_resolution" tools:ignore="MissingTranslation">Video resolution</string>
+    <string name="video_quality_uhd" translatable="false">4K (2160p)</string>
+    <string name="video_quality_fhd" translatable="false">1080p</string>
+    <string name="video_quality_hd" translatable="false">720p</string>
+    <!-- HDR switch -->
+    <string name="settings_video_hdr" tools:ignore="MissingTranslation">HDR video</string>
+    <string name="settings_video_hdr_description" tools:ignore="MissingTranslation">Record 10-bit HLG (HEVC) when the camera and encoder support it. No motion-adaptive bitrate or ISO limit while on.</string>
+    <string name="settings_video_hdr_short" tools:ignore="MissingTranslation">10-bit HLG, HEVC</string>
+    <!-- ISO limit picker -->
+    <string name="settings_video_iso_limit" tools:ignore="MissingTranslation">ISO limit</string>
+    <string name="settings_video_iso_limit_description" tools:ignore="MissingTranslation">Highest ISO the camera may use while filming. Lower keeps noise down but makes dark scenes darker; the shutter stays at 1/fps. Max leaves exposure fully automatic.</string>
+    <string name="settings_video_iso_max" tools:ignore="MissingTranslation">Max</string>
+    <string name="settings_iso_value" translatable="false">ISO %1$d</string>
 
     <!-- Debug overlay (SettingsPage and the quick panel) -->
     <string name="settings_debug_overlay" tools:ignore="MissingTranslation">Debug overlay</string>

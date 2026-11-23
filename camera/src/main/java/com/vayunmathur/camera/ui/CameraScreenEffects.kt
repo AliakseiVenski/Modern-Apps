@@ -152,7 +152,10 @@ internal fun CameraScreenEffects(
                 val motion = com.vayunmathur.camera.platform.VideoMotionAnalyzer { sample ->
                     viewModel.onSceneMotionSample(sample)
                 }
-                viewModel.setAnalysisSink { frame -> motion.onYPlane(frame.yPlane) }
+                viewModel.setAnalysisSink { frame ->
+                    motion.onYPlane(frame.yPlane)
+                    viewModel.previewIsoCap.onYPlane(frame.yPlane, viewModel.activeCamera2Session)
+                }
             }
             state.isPhotoType -> {
                 state.maskBitmap = null

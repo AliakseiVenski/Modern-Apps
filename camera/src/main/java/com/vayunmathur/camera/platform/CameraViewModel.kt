@@ -273,6 +273,9 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
 
     internal val debug = DebugOverlayState()
 
+    /** Keeps the video viewfinder under the user's ISO cap; see [applyVideoPreviewParams]. */
+    internal val previewIsoCap = PreviewIsoCap()
+
     /** Fixed fps the current or last recording targets; shown in the debug overlay. */
     @Volatile internal var videoFpsTarget: Int = 0
 

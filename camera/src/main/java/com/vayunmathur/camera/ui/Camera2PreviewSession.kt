@@ -62,6 +62,20 @@ internal class Camera2PreviewSession(
     @Volatile
     private var streamed = false
 
+    /** True once the current profile was already retried unchanged (see [nextRebuildDelayMs]). */
+    @Volatile
+    private var retriedCurrentProfile = false
+
+    private val createdAtMs = android.os.SystemClock.elapsedRealtime()
+
+    /**
+     * Pause before the next rebuild. The first failure of a profile is often a cold-HAL hiccup, so it
+     * is retried unchanged after a short pause; only a repeat failure waits for the HAL to settle
+     * and degrades a rung.
+     */
+    val nextRebuildDelayMs: Long
+        get() = if (retriedCurrentProfile) DEGRADE_DELAY_MS else RETRY_DELAY_MS
+
     /** One rebuild at a time: a dying session reports several errors for one failure. */
     private val rebuildInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -173,6 +187,11 @@ internal class Camera2PreviewSession(
             listener = object : Camera2Session.Listener {
                 override fun onStreaming(previewSize: com.vayunmathur.camera.platform.camera2.FrameSize) {
                     streamed = true
+                    Log.status(
+                        "Camera2Preview",
+                        "streaming after ${android.os.SystemClock.elapsedRealtime() - createdAtMs} ms " +
+                            "(profile $profileIndex, retried=$retriedCurrentProfile)",
+                    )
                 }
 
                 override fun onError(message: String) {
@@ -205,7 +224,12 @@ internal class Camera2PreviewSession(
             rebuildInFlight.set(false)
             return null
         }
-        profileIndex++
+        if (retriedCurrentProfile) {
+            profileIndex++
+            retriedCurrentProfile = false
+        } else {
+            retriedCurrentProfile = true
+        }
         val snapshot = facadeSnapshot ?: return null
         session?.close()
         session = null
@@ -260,5 +284,7 @@ internal class Camera2PreviewSession(
     private companion object {
         /** Last degrade rung (preview + JPEG only). */
         const val MAX_PROFILE_INDEX = 3
+        const val RETRY_DELAY_MS = 500L
+        const val DEGRADE_DELAY_MS = 4000L
     }
 }
