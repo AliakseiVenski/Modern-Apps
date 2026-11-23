@@ -123,6 +123,9 @@ interface StillResultCallback {
 }
 
 /** Testable handle over a `CameraCaptureSession`. */
+/** How long a tap-to-focus scan holds before continuous AF takes over again. */
+internal const val AF_HOLD_MS = 3000L
+
 interface CaptureSessionHandle {
     /** Issues [params] as the TEMPLATE_PREVIEW repeating request on [target]. */
     fun setRepeatingPreview(params: ResolvedRequestParams, target: Surface)
@@ -147,6 +150,12 @@ interface CaptureSessionHandle {
     ) {
         if (targets.isNotEmpty()) setRepeatingPreview(params, targets.first())
     }
+
+    /**
+     * One-shot AF scan at the regions in [params] (tap-to-focus), released back to continuous AF after
+     * [AF_HOLD_MS]. A repeating AF trigger would re-scan every frame, so this is a single capture.
+     */
+    fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>) {}
 
     /** True when this session was created as reprocessable. */
     val isReprocessable: Boolean get() = false
@@ -711,6 +720,20 @@ private class AndroidCaptureSessionHandle(
             }
         }
         session.setRepeatingRequest(builder.build(), captureCallback, handler)
+    }
+
+    override fun triggerAutoFocus(params: ResolvedRequestParams, targets: List<Surface>) {
+        fun send(trigger: Int) {
+            val builder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+            builder.applyPreviewParams(params, targets.first())
+            targets.drop(1).forEach { builder.addTarget(it) }
+            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, trigger)
+            session.capture(builder.build(), null, handler)
+        }
+        send(CaptureRequest.CONTROL_AF_TRIGGER_START)
+        handler.postDelayed({
+            runCatching { send(CaptureRequest.CONTROL_AF_TRIGGER_CANCEL) }
+        }, AF_HOLD_MS)
     }
 
     override fun captureReprocess(

@@ -254,8 +254,8 @@ class Camera2Session(
 
     /**
      * Tap metering: transforms a normalised viewfinder tap into AF + AE metering regions
-     * (see [MeteringTransform]) and re-issues the request. No AF trigger is sent, so continuous
-     * AF keeps tracking: it focuses on the tapped area and refocuses when the subject leaves it.
+     * (see [MeteringTransform]) and re-issues the request. One AF scan is triggered at the point and
+     * released after [AF_HOLD_MS], so continuous AF then keeps tracking and refocuses when the subject leaves.
      * [lockAe] freezes the exposure after metering (long press).
      * [displayRotationDegrees] is the display rotation (0/90/180/270);
      * [mirrored] is true for a mirrored front preview.
@@ -282,6 +282,7 @@ class Camera2Session(
             )
             controls = controls.copy(afRegion = region, aeRegion = region, aeLock = lockAe)
             issueRepeatingRequest()
+            if (!lockAe) triggerAutoFocus()
         }
     }
 
@@ -683,6 +684,14 @@ class Camera2Session(
     }
 
     // -- internals (executor thread only) ------------------------------------
+
+    private fun triggerAutoFocus() {
+        val session = captureSession ?: return
+        val surface = previewSurface ?: return
+        if (stateMachine.state != SessionState.STREAMING) return
+        val targets = listOfNotNull(surface, ringOutput?.surface, rawRingOutput?.surface, analysisOutput?.surface)
+        runCatching { session.triggerAutoFocus(Camera2Controls.resolve(controls, snapshot), targets) }
+    }
 
     private fun issueRepeatingRequest() {
         val session = captureSession ?: return
