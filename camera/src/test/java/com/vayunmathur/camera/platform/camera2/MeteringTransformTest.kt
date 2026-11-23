@@ -27,11 +27,11 @@ class MeteringTransformTest {
         // 180: both axes flip.
         assertEquals(0.75f to 0.25f,
             MeteringTransform.rotateViewfinderPoint(0.25f, 0.75f, 180, mirrored = false))
-        // 90 clockwise: (x,y) -> (1-y, x).
-        assertEquals(0.25f to 0.25f,
-            MeteringTransform.rotateViewfinderPoint(0.25f, 0.75f, 90, mirrored = false))
-        // 270 clockwise: (x,y) -> (y, 1-x).
+        // Sensor needs 90 clockwise to look upright: (x,y) -> (y, 1-x).
         assertEquals(0.75f to 0.75f,
+            MeteringTransform.rotateViewfinderPoint(0.25f, 0.75f, 90, mirrored = false))
+        // 270: (x,y) -> (1-y, x).
+        assertEquals(0.25f to 0.25f,
             MeteringTransform.rotateViewfinderPoint(0.25f, 0.75f, 270, mirrored = false))
         // Non-quarter / negative inputs normalise instead of throwing.
         assertEquals(0.75f to 0.25f,
@@ -62,14 +62,14 @@ class MeteringTransformTest {
 
     @Test fun cornerTapsLandOnCropCorners() {
         val crop = MeteringTransform.cropRegionForZoom(active, 2f)
-        // Back lens, sensor 90 / display 0: viewfinder top-left is the crop's
-        // (right-1, top) corner in sensor space.
+        // Back lens, sensor 90 / display 0: rotating the sensor image 90 clockwise puts its
+        // bottom-left corner at the viewfinder's top-left, so that is the crop's (left, bottom-1).
         val (x, y) = MeteringTransform.viewfinderToSensorPoint(
             0f, 0f, crop,
             sensorOrientationDegrees = 90, displayRotationDegrees = 0, mirrored = false,
         )
-        assertEquals((crop.right - 1).toFloat(), x, 0.6f)
-        assertEquals(crop.top.toFloat(), y, 0.6f)
+        assertEquals(crop.left.toFloat(), x, 0.6f)
+        assertEquals((crop.bottom - 1).toFloat(), y, 0.6f)
     }
 
     @Test fun meteringRegionStaysInsideActiveArrayAtEdges() {

@@ -74,8 +74,9 @@ object MeteringTransform {
     /**
      * Rotates a normalised viewfinder point into sensor orientation.
      * [relativeRotationDegrees] is `(sensorOrientation - displayRotation)`
-     * normalised to 0/90/180/270: how far sensor space is rotated clockwise
-     * from what the user sees. Front lenses mirror the preview, so the
+     * normalised to 0/90/180/270: the clockwise angle the sensor image must be rotated
+     * to look upright, so a viewfinder point maps back to the sensor by rotating
+     * counter-clockwise by that angle. Front lenses mirror the preview, so the
      * x-axis flips before rotation when [mirrored].
      */
     fun rotateViewfinderPoint(
@@ -86,9 +87,9 @@ object MeteringTransform {
     ): Pair<Float, Float> {
         val mx = if (mirrored) 1f - x else x
         return when (((relativeRotationDegrees % 360) + 360) % 360) {
-            90 -> (1f - y) to mx
+            90 -> y to (1f - mx)
             180 -> (1f - mx) to (1f - y)
-            270 -> y to (1f - mx)
+            270 -> (1f - y) to mx
             else -> mx to y
         }
     }
