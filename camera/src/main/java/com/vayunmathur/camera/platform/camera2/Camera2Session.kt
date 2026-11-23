@@ -55,6 +55,8 @@ class Camera2Session(
     internal val ultraHdrEnabled: Boolean = true,
     /** Preview-only HLG10 session for the HDR video viewfinder (no still/analysis outputs). */
     internal val hdrPreview: Boolean = false,
+    /** Video viewfinder: preview + analysis only (a still stream keeps HALs from stabilizing it). */
+    internal val videoPreview: Boolean = false,
 ) {
 
     /** Session lifecycle notifications; all fire on the executor thread. */

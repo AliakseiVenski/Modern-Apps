@@ -88,6 +88,8 @@ internal fun Camera2Preview(
     analysisConsumer: com.vayunmathur.camera.platform.camera2.AnalysisConsumer? = null,
     /** 10-bit HLG viewfinder: SurfaceView + HDR window colour mode, preview-only session. */
     hdrPreview: Boolean = false,
+    /** Video modes: lean preview-only session with the record template, so stabilization works live. */
+    videoPreview: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -110,8 +112,10 @@ internal fun Camera2Preview(
         Box(modifier = modifier.background(Color.Black))
         return
     }
-    val sessionHolder = remember(lensFacing, hdrPreview) {
-        Camera2PreviewSession(context, lensFacing, onError, if (hdrPreview) null else analysisConsumer, hdrPreview)
+    val sessionHolder = remember(lensFacing, hdrPreview, videoPreview) {
+        Camera2PreviewSession(
+            context, lensFacing, onError, if (hdrPreview) null else analysisConsumer, hdrPreview, videoPreview,
+        )
     }
     if (hdrPreview) {
         DisposableEffect(Unit) {

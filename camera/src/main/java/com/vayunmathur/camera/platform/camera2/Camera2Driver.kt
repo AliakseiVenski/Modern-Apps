@@ -683,6 +683,7 @@ private class AndroidCaptureSessionHandle(
 ) : CaptureSessionHandle {
 
     private var imageWriter: android.media.ImageWriter? = null
+    private var lastStabilizationLog: String? = null
 
     // Reprocess requests are built from a frame's TotalCaptureResult
     // (createReprocessCaptureRequest), so preview results are retained
@@ -700,7 +701,10 @@ private class AndroidCaptureSessionHandle(
         targets: List<Surface>,
         callback: PreviewResultCallback?,
     ) {
-        val builder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        // A video viewfinder uses the record template, as the recording session does: HALs apply
+        // electronic stabilization to it, but not to the plain preview template.
+        val template = if (params.videoFps != null) CameraDevice.TEMPLATE_RECORD else CameraDevice.TEMPLATE_PREVIEW
+        val builder = device.createCaptureRequest(template)
         builder.applyPreviewParams(params, targets.first())
         targets.drop(1).forEach { builder.addTarget(it) }
         val captureCallback = if (callback == null) {
@@ -717,6 +721,14 @@ private class AndroidCaptureSessionHandle(
                         while (previewResults.size > 16) {
                             previewResults.remove(previewResults.keys.first())
                         }
+                    }
+                    val applied = "preview result video=${result.get(CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE)} " +
+                        "ois=${result.get(CaptureResult.LENS_OPTICAL_STABILIZATION_MODE)} " +
+                        "physical=${result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)} " +
+                        "crop=${result.get(CaptureResult.SCALER_CROP_REGION)} zoom=${result.get(CaptureResult.CONTROL_ZOOM_RATIO)}"
+                    if (applied != lastStabilizationLog) {
+                        lastStabilizationLog = applied
+                        com.vayunmathur.library.log.Log.status("Stabilization", applied)
                     }
                     callback.onPreviewResult(result.toRawStillMetadata())
                 }

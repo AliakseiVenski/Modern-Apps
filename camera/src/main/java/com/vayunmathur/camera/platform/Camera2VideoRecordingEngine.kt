@@ -457,6 +457,7 @@ class Camera2VideoRecordingEngine(
                 result: android.hardware.camera2.TotalCaptureResult,
             ) {
                 val timestamp = result.get(android.hardware.camera2.CaptureResult.SENSOR_TIMESTAMP) ?: return
+                logStabilization(result)
                 sink(
                     timestamp,
                     result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME),
@@ -467,6 +468,21 @@ class Camera2VideoRecordingEngine(
                 )
             }
         }
+    }
+
+    private var lastStabilizationLog: String? = null
+
+    /** Logs what the HAL really applied for stabilization, once per change (the request may be ignored). */
+    private fun logStabilization(result: android.hardware.camera2.TotalCaptureResult) {
+        val applied = "recording requested video=${config.stabilizationMode} ois=${config.opticalStabilization} " +
+            "result video=${result.get(android.hardware.camera2.CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE)} " +
+            "ois=${result.get(android.hardware.camera2.CaptureResult.LENS_OPTICAL_STABILIZATION_MODE)} " +
+            "physical=${result.get(android.hardware.camera2.CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)} " +
+            "crop=${result.get(android.hardware.camera2.CaptureResult.SCALER_CROP_REGION)} " +
+            "zoom=${result.get(android.hardware.camera2.CaptureResult.CONTROL_ZOOM_RATIO)}"
+        if (applied == lastStabilizationLog) return
+        lastStabilizationLog = applied
+        Log.status("Stabilization", applied)
     }
 
     /** Every 2 s: ask the controller, apply via encoder parameters when it moves. */

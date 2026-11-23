@@ -106,6 +106,7 @@ internal fun CameraPreviewSurface(
                 remember(camera2Id) { viewModel.hdrSupported(camera2Id) }
             Camera2Preview(
                 hdrPreview = hdrPreview,
+                videoPreview = state.isVideoType,
                 cameraId = camera2Id,
                 lensFacing = state.selectedLens?.facing,
                 zoomRatio = state.zoomRatio,

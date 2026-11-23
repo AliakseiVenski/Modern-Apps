@@ -38,6 +38,7 @@ internal class Camera2PreviewSession(
     onError: (String) -> Unit = {},
     private val analysisConsumer: com.vayunmathur.camera.platform.camera2.AnalysisConsumer? = null,
     private val hdrPreview: Boolean = false,
+    private val videoPreview: Boolean = false,
 ) {
     val executor = Camera2Executor("Camera2Preview-${lensFacing?.name ?: "unknown"}")
 
@@ -193,6 +194,7 @@ internal class Camera2PreviewSession(
             analysisConsumer = if (profileIndex < 3) analysisConsumer else null,
             ultraHdrEnabled = profileIndex < 1,
             hdrPreview = hdrPreview,
+            videoPreview = videoPreview,
             listener = object : Camera2Session.Listener {
                 override fun onStreaming(previewSize: com.vayunmathur.camera.platform.camera2.FrameSize) {
                     streamed = true
@@ -281,7 +283,7 @@ internal class Camera2PreviewSession(
         get() {
             val updated = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }
                 .getOrDefault(0L)
-            return "${lensFacing?.name}_$updated"
+            return "${lensFacing?.name}_${if (videoPreview) "video" else "photo"}_$updated"
         }
 
     /** Profile that streamed last time on this lens, so a HAL that rejects the richer ones is not probed every launch. */

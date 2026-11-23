@@ -36,13 +36,14 @@ internal fun Camera2Session.configureSession(opened: DeviceHandle, gen: Long, re
     // The profile ladder in Camera2PreviewSession remains only as a
     // safety net for HALs that reject even guaranteed combinations.
     val consumer = analysisConsumer
-    val plan = StreamSelection.planSessionStreams(
+    val fullPlan = StreamSelection.planSessionStreams(
         snapshot = snapshot,
         ringEnabled = ringConfig.enabled,
         rawEnabled = rawRingConfig.enabled,
         ultraHdrEnabled = ultraHdrEnabled,
         hasAnalysisConsumer = consumer != null && !analysisComboDropped,
     )
+    val plan = if (videoPreview) fullPlan.copy(jpeg = null, jpegR = null, ring = null, raw = null) else fullPlan
     // Second output: the JPEG still reader, when the lens reports JPEG
     // sizes and the driver can create it. Failure degrades to
     // preview-only (capture() then fails cleanly, policy excludes it).
