@@ -42,10 +42,25 @@ internal class PreviewIsoCap {
     private var aeLuma = -1.0
     private var aeLumaAtMs = 0L
 
-    /** Exposure (time x effective ISO) of recent frames by sensor timestamp, from their capture results. */
-    private val frameExposure = object : LinkedHashMap<Long, Double>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Double>?) = size > FRAME_HISTORY
+    /** What a recent frame was really taken with, by sensor timestamp, from its capture result. */
+    private class FrameInfo(val exposure: Double, val lens: String?)
+
+    private val frames = object : LinkedHashMap<Long, FrameInfo>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, FrameInfo>?) = size > FRAME_HISTORY
     }
+
+    /** Zoom ratios each physical lens has been seen serving (min to max), to predict a switch. */
+    private val lensZoom = HashMap<String, Pair<Float, Float>>()
+
+    /** Relative sensitivity of each physical lens, in stops, measured across switches. */
+    private val lensStops = HashMap<String, Double>()
+
+    /** The last judged frame: lens, luma, exposure. A frame of another lens right after it measures the step. */
+    private var lastLens: String? = null
+    private var lastLuma = 0.0
+    private var lastExposure = 0.0
+    private var expectedLens: String? = null
+    private var expectUntilMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -70,10 +85,16 @@ internal class PreviewIsoCap {
     /** Capture result of a preview frame (session executor thread). */
     @Synchronized
     fun onFrameResult(raw: RawStillMetadata) {
+        val lens = raw.physicalCameraId
+        val zoom = raw.zoomRatio
+        if (lens != null && zoom != null) {
+            val seen = lensZoom[lens]
+            lensZoom[lens] = if (seen == null) zoom to zoom else minOf(seen.first, zoom) to maxOf(seen.second, zoom)
+        }
         val ts = raw.sensorTimestampNs ?: return
         val time = raw.exposureTimeNs ?: return
         val iso = raw.iso ?: return
-        if (time > 0L && iso > 0) frameExposure[ts] = time.toDouble() * iso
+        if (time > 0L && iso > 0) frames[ts] = FrameInfo(time.toDouble() * iso, lens)
     }
 
     /** One analysis frame of the preview. */
@@ -98,8 +119,15 @@ internal class PreviewIsoCap {
             return
         }
         // Only a frame whose real exposure is known can be judged; others (result not in yet) are skipped.
-        val exposure = frameExposure[timestampNs] ?: return
+        val info = frames[timestampNs] ?: return
+        val exposure = info.exposure
         val metered = meter(plane, session) ?: return
+        learnLensStep(info.lens, metered, exposure)
+        // A predicted lens switch was sent with its exposure: frames still from the old lens would undo it.
+        val waiting = expectedLens
+        if (waiting != null) {
+            if (info.lens == waiting || now > expectUntilMs) expectedLens = null else return
+        }
         val since = if (lastMs == 0L) MIN_DT_MS else (now - lastMs).coerceIn(MIN_DT_MS, MAX_GAP_MS)
         lastMs = now
         // Exposure compensation: no AE to nudge, so the target moves. Luma ~ exposure^(1/2.2).
@@ -170,6 +198,48 @@ internal class PreviewIsoCap {
         }
     }
 
+    /**
+     * Same scene, adjacent frames, two lenses: the luma and exposure on each side give the lenses' relative
+     * sensitivity (luma ~ (exposure x sensitivity)^(1/2)). Averaged per lens over switches.
+     */
+    private fun learnLensStep(lens: String?, luma: Double, exposure: Double) {
+        val previous = lastLens
+        if (lens != null && previous != null && lens != previous &&
+            luma in USABLE_LUMA && lastLuma in USABLE_LUMA && exposure > 0.0 && lastExposure > 0.0
+        ) {
+            val stepStops = LENS_GAMMA * log2(luma / lastLuma) + log2(lastExposure / exposure)
+            val base = lensStops.getOrPut(previous) { 0.0 }
+            val measured = base + stepStops
+            lensStops[lens] = lensStops[lens]?.let { (it + measured) / 2 } ?: measured
+        }
+        if (lens != null) {
+            lastLens = lens
+            lastLuma = luma
+            lastExposure = exposure
+        }
+    }
+
+    /**
+     * A zoom request is about to go out. When it moves to another physical lens whose sensitivity is known,
+     * returns the exposure to send in the same request, so the first frame of the new lens is already right.
+     */
+    @Synchronized
+    fun exposureForZoom(ratio: Float): com.vayunmathur.camera.domain.ExposureSetting? {
+        val active = controller ?: return null
+        if (!manual) return null
+        val current = lastLens ?: return null
+        val target = lensZoom.entries.filter { ratio >= it.value.first - ZOOM_MARGIN && ratio <= it.value.second + ZOOM_MARGIN }
+            .map { it.key }.let { if (current in it) current else it.singleOrNull() } ?: return null
+        if (target == current) return null
+        val from = lensStops[current] ?: return null
+        val to = lensStops[target] ?: return null
+        expectedLens = target
+        expectUntilMs = SystemClock.elapsedRealtime() + EXPECT_TIMEOUT_MS
+        return active.scaleExposure(Math.pow(2.0, from - to))
+    }
+
+    private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
+
     /** Without a cap the overlay still shows the frame's luma, to compare Auto with the lock. */
     private fun publishAutoLuma(plane: PlaneView) {
         val now = SystemClock.elapsedRealtime()
@@ -217,6 +287,10 @@ internal class PreviewIsoCap {
         const val MIN_DT_MS = 16L
         const val MAX_GAP_MS = 200L
         const val FRAME_HISTORY = 32
+        const val LENS_GAMMA = 2.0
+        val USABLE_LUMA = 12.0..235.0
+        const val ZOOM_MARGIN = 0.02f
+        const val EXPECT_TIMEOUT_MS = 400L
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0

@@ -35,6 +35,8 @@ data class RawStillMetadata(
     val colorCorrectionGains: List<Float>? = null,
     /** The physical camera behind a logical multi-camera right now (null on a single camera). */
     val physicalCameraId: String? = null,
+    /** `CONTROL_ZOOM_RATIO` this frame was taken at. */
+    val zoomRatio: Float? = null,
 )
 
 /**

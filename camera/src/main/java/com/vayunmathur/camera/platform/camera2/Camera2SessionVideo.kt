@@ -39,6 +39,14 @@ fun Camera2Session.setShutterPriority(timeNs: Long?) {
     }
 }
 
+/** Zoom and ISO-cap exposure in one request, so a lens switch and its exposure change land on the same frame. */
+fun Camera2Session.setZoomAndIsoCap(ratio: Float, timeNs: Long, iso: Int) {
+    executor.execute {
+        controls = controls.copy(zoomRatio = ratio, isoCapTimeNs = timeNs, isoCapIso = iso)
+        issueRepeatingRequest()
+    }
+}
+
 /** True while the user holds exposure (long press); the software ISO cap freezes with it. */
 val Camera2Session.aeLocked: Boolean get() = controls.aeLock
 

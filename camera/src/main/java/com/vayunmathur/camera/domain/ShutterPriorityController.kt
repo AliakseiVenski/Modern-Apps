@@ -75,6 +75,13 @@ class ShutterPriorityController(
         return next
     }
 
+    /** Multiplies the requested exposure (a predicted lens change) and returns the new setting. */
+    fun scaleExposure(factor: Double): ExposureSetting {
+        exposure = clamp(exposure * factor)
+        current = split(exposure)
+        return current
+    }
+
     private fun log2(x: Double) = ln(x) / ln(2.0)
 
     private fun stopsPerSecond(errorStops: Double): Double =

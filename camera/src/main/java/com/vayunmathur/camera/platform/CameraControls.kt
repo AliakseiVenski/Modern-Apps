@@ -1,6 +1,7 @@
 package com.vayunmathur.camera.platform
 
 import com.vayunmathur.camera.platform.camera2.clearMetering
+import com.vayunmathur.camera.platform.camera2.setZoomAndIsoCap
 import com.vayunmathur.camera.platform.camera2.tapToFocus
 import com.vayunmathur.library.log.Log
 import androidx.lifecycle.viewModelScope
@@ -71,7 +72,13 @@ fun CameraViewModel.setZoomRatio(ratio: Float, smooth: Boolean = false) {
 private fun CameraViewModel.pushZoomRatio(ratio: Float) {
     zoomRatioMutable.value = ratio
     camera2RecordingState.engine?.setZoomRatio(ratio)
-    activeCamera2Session?.setZoomRatio(ratio)
+    activeCamera2Session?.let { sendZoom(it, ratio) }
+}
+
+/** Zoom to the camera; with the shutter lock, a predicted lens switch carries its exposure in the same request. */
+private fun CameraViewModel.sendZoom(session: com.vayunmathur.camera.platform.camera2.Camera2Session, ratio: Float) {
+    val exposure = previewIsoCap.exposureForZoom(ratio)
+    if (exposure != null) session.setZoomAndIsoCap(ratio, exposure.timeNanos, exposure.iso) else session.setZoomRatio(ratio)
 }
 
 private fun CameraViewModel.applyZoomRatio(ratio: Float) {
@@ -88,7 +95,7 @@ private fun CameraViewModel.applyZoomRatio(ratio: Float) {
     val clamped = if (range != null) ratio.coerceIn(range.lower, range.upper) else ratio
     zoomRatioMutable.value = clamped
     viewModelScope.launch { ds.setString("camera_zoom_ratio", clamped.toString()) }
-    session?.setZoomRatio(clamped)
+    session?.let { sendZoom(it, clamped) }
 }
 
 /**
