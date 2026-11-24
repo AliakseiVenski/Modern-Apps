@@ -54,6 +54,11 @@ class ShutterPriorityController(
         return next
     }
 
+    /** Treats the next reading as the first: it corrects at once (used once a take-over exposure has landed). */
+    fun reanchor() {
+        smoothedLuma = -1.0
+    }
+
     private fun log2(x: Double) = ln(x) / ln(2.0)
 
     private fun stopsPerSecond(errorStops: Double): Double =

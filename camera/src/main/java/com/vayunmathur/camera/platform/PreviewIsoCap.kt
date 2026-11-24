@@ -33,6 +33,9 @@ internal class PreviewIsoCap {
     private var lastPhysicalId: String? = null
     private var lastZoomMs = 0L
     private var lastAeProduct = 0.0
+    private var aeLuma = -1.0
+    private var aeLumaAtMs = 0L
+    private var reanchorAtMs = 0L
     private var aeStableSinceMs = 0L
     private var belowSinceMs = 0L
 
@@ -47,6 +50,9 @@ internal class PreviewIsoCap {
         belowSinceMs = 0L
         lastMs = 0L
         lastAeProduct = 0.0
+        aeLuma = -1.0
+        aeLumaAtMs = 0L
+        reanchorAtMs = 0L
         status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
@@ -78,6 +84,10 @@ internal class PreviewIsoCap {
         val active = controller ?: newController(cap, frameNanos, session, metered).also {
             controller = it
             command(session, it.current)
+        }
+        if (reanchorAtMs != 0L && now >= reanchorAtMs) {
+            active.reanchor()
+            reanchorAtMs = 0L
         }
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
         // The scene is bright enough that a one-frame shutter is no longer the limit: hand back to the camera.
@@ -111,21 +121,34 @@ internal class PreviewIsoCap {
             return
         }
         val product = time.toDouble() * iso
-        if (lastAeProduct <= 0.0 || kotlin.math.abs(product / lastAeProduct - 1.0) > AE_STABLE_TOLERANCE) aeStableSinceMs = now
-        lastAeProduct = product
+        // Judged against where it was when it last moved, not frame to frame: AE glides by tiny steps.
+        if (lastAeProduct <= 0.0 || kotlin.math.abs(product / lastAeProduct - 1.0) > AE_STABLE_TOLERANCE) {
+            aeStableSinceMs = now
+            lastAeProduct = product
+        }
+        val metered = meter(plane, session)
+        if (metered != null) {
+            val dt = if (aeLumaAtMs == 0L) 0.0 else (now - aeLumaAtMs) / 1000.0
+            aeLuma = if (aeLuma < 0.0) metered else aeLuma + (metered - aeLuma) * (1 - kotlin.math.exp(-dt / AE_LUMA_TAU))
+            aeLumaAtMs = now
+        }
         val violating = time >= frameNanos * VIOLATION_SHUTTER_FRACTION
         val needsCap = time >= frameNanos * ENTER_SHUTTER_FRACTION || iso > cap.isoLimit
         status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso"
         if (!needsCap || (!violating && now - modeSinceMs < DWELL_MS)) return
         // After a zoom or lens change the camera's AE is still finding the brightness: let it settle first.
         if (now - lastZoomMs < ZOOM_QUIET_MS || now - aeStableSinceMs < AE_STABLE_MS) return
-        if (session.aeLocked) return
-        val metered = meter(plane, session) ?: return
+        if (session.aeLocked || aeLuma < 0.0) return
         manual = true
         modeSinceMs = now
         belowSinceMs = 0L
         lastMs = 0L
-        controller = newController(cap, frameNanos, session, metered).also { command(session, it.current) }
+        // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
+        val anchor = aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
+        controller = newController(cap, frameNanos, session, anchor).also { command(session, it.current) }
+        // The AE's reported exposure is not what a manual request of the same size gives: once the take-over
+        // has landed, re-judge against the brightness AE had and correct at once.
+        reanchorAtMs = now + REANCHOR_AFTER_MS
     }
 
     /**
@@ -228,8 +251,8 @@ internal class PreviewIsoCap {
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val INTERVAL_MS = 33L
         const val AUTO_LUMA_INTERVAL_MS = 300L
-        const val ANCHOR_MIN_LUMA = 85.0
-        const val ANCHOR_MAX_LUMA = 125.0
+        const val ANCHOR_MIN_LUMA = 60.0
+        const val ANCHOR_MAX_LUMA = 160.0
         const val MAX_GAP_MS = 200L
         /** Camera AE at this share of a frame's shutter or more: it is about to cost frame rate. */
         const val ENTER_SHUTTER_FRACTION = 0.9
@@ -243,6 +266,8 @@ internal class PreviewIsoCap {
         const val ZOOM_QUIET_MS = 700L
         const val AE_STABLE_MS = 250L
         const val AE_STABLE_TOLERANCE = 0.05
+        const val AE_LUMA_TAU = 0.2
+        const val REANCHOR_AFTER_MS = 150L
         const val SEED_ISO = 400
     }
 }
