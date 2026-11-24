@@ -25,10 +25,6 @@ internal class PreviewIsoCap {
     private var controller: ShutterPriorityController? = null
     private var lastMs = 0L
     private var lastAutoLumaMs = 0L
-    private var commandedProduct = 0.0
-    private var commandedAtMs = 0L
-    private var baselineResult = 0.0
-    private var expectedChange = 1.0
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -37,9 +33,6 @@ internal class PreviewIsoCap {
         setup = newSetup
         controller = null
         lastMs = 0L
-        commandedProduct = 0.0
-        baselineResult = 0.0
-        expectedChange = 1.0
         status.value = newSetup?.let { "ISO cap ${it.isoLimit}: waiting for analysis frames" }
     }
 
@@ -58,7 +51,6 @@ internal class PreviewIsoCap {
         val now = SystemClock.elapsedRealtime()
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return
-        if (!commandLanded(session, now)) return
         // A tapped point meters its own window (as the HAL's AE does), else the whole frame.
         val metered = tappedLuma(plane, session)
             ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) } ?: return
@@ -69,9 +61,9 @@ internal class PreviewIsoCap {
         val frameNanos = NANOS_PER_SECOND / cap.fps
         val active = controller ?: newController(cap, frameNanos, session, metered).also {
             controller = it
-            command(session, it.current, now)
+            command(session, it.current)
         }
-        active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it, now) }
+        active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
         val snapshot = session.characteristics
         val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
             active.current.iso,
@@ -91,36 +83,8 @@ internal class PreviewIsoCap {
         return ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, seed(session, frameNanos), target)
     }
 
-    private fun command(session: Camera2Session, setting: ExposureSetting, now: Long) {
+    private fun command(session: Camera2Session, setting: ExposureSetting) =
         session.setIsoCap(setting.timeNanos, setting.iso)
-        val product = setting.timeNanos.toDouble() * setting.iso
-        expectedChange = if (commandedProduct > 0.0) product / commandedProduct else 1.0
-        commandedProduct = product
-        commandedAtMs = now
-        baselineResult = resultProduct(session)
-    }
-
-    /**
-     * The camera applies an exposure a few frames after it is requested, so a brightness reading taken right
-     * after a change still shows the old exposure. Correcting on it overshoots and the picture hunts up and
-     * down. The next step therefore waits until the frame results report the commanded exposure (or a short
-     * timeout), so every reading reflects the last step.
-     */
-    private fun commandLanded(session: Camera2Session, now: Long): Boolean {
-        if (commandedProduct <= 0.0 || now - commandedAtMs >= SETTLE_TIMEOUT_MS) return true
-        val expected = kotlin.math.ln(expectedChange)
-        if (kotlin.math.abs(expected) < MIN_SETTLE_LOG) return true
-        val current = resultProduct(session)
-        if (baselineResult <= 0.0 || current <= 0.0) return false
-        // Judged by how far the reported exposure has moved, not by its absolute value: the camera reports
-        // its own scale (ISP gain), which differs from the request, but it follows the request's changes.
-        return kotlin.math.ln(current / baselineResult) / expected >= SETTLE_PROGRESS
-    }
-
-    private fun resultProduct(session: Camera2Session): Double {
-        val (time, iso) = session.latestAeSnapshot()
-        return if (time == null || iso == null) 0.0 else time.toDouble() * iso
-    }
 
     /** Without a cap the overlay still shows the frame's luma, to compare Auto with a limit. */
     private fun publishAutoLuma(plane: PlaneView) {
@@ -175,9 +139,6 @@ internal class PreviewIsoCap {
         const val LUMA_GAMMA = 2.2
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val INTERVAL_MS = 33L
-        const val SETTLE_TIMEOUT_MS = 150L
-        const val SETTLE_PROGRESS = 0.75
-        const val MIN_SETTLE_LOG = 0.03
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 85.0
         const val ANCHOR_MAX_LUMA = 125.0

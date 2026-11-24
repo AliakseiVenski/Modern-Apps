@@ -75,10 +75,13 @@ class ShutterPriorityController(
         private const val LUMA_TAU = 0.1
         private const val EXPOSURE_TAU = 0.4
         private const val BASE_STOPS_PER_SECOND = 2.0
-        private const val MAX_STOPS_PER_SECOND = 5.0
+        private const val MAX_STOPS_PER_SECOND = 6.0
 
-        /** Share of the remaining error corrected per step: below 1 so the delay of the camera cannot make it overshoot. */
-        private const val MAX_RESPONSE = 0.25
+        /**
+         * Share of the remaining error corrected per step. Small, because steps come every frame or two and the
+         * camera applies each a few frames late: many small steps glide, a few large ones show as jumps and hunt.
+         */
+        private const val MAX_RESPONSE = 0.1
         private const val FAST_ERROR_STOPS = 4.0
         private const val FIRST_STEP_MAX_STOPS = 8.0
         private const val CUT_RATIO = 2.2
