@@ -33,6 +33,12 @@ internal class PreviewIsoCap {
     private var modeSinceMs = 0L
     private var lastPhysicalId: String? = null
     private var nativeSinceMs = 0L
+    private var lensPair = ""
+    private var lensUsedGain = 1.0
+    private var lensSnapAtMs = 0L
+
+    /** Exposure factor between two physical lenses ("from>to"), learned from earlier switches. */
+    private val lensGain = HashMap<String, Double>()
     private var nativeFailed = false
     private var lastZoomMs = 0L
     private var lastAeProduct = 0.0
@@ -63,6 +69,7 @@ internal class PreviewIsoCap {
         aeLuma = -1.0
         aeLumaAtMs = 0L
         reanchorAtMs = 0L
+        lensSnapAtMs = 0L
         status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
@@ -102,13 +109,22 @@ internal class PreviewIsoCap {
             command(session, it.current)
         }
         val learning = reanchorAtMs != 0L && now >= reanchorAtMs
+        val lensLearning = lensSnapAtMs != 0L && now >= lensSnapAtMs
         val before = active.exposureProduct
-        if (learning) {
+        if (learning || lensLearning) {
             active.reanchor()
             reanchorAtMs = 0L
+            lensSnapAtMs = 0L
         }
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
-        if (learning && before > 0.0) {
+        if (lensLearning && before > 0.0) {
+            // Gain between these two lenses: what was applied up front times the correction the picture still needed.
+            val learned = (lensUsedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
+            val blended = lensGain[lensPair]?.let { (it + learned) / 2 } ?: learned
+            lensGain[lensPair] = blended
+            val (from, to) = lensPair.split('>')
+            lensGain["$to>$from"] = 1.0 / blended
+        } else if (learning && before > 0.0) {
             // The one-step correction is the gain a manual request of AE's exposure was missing; remember it.
             val learned = (usedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
             takeoverGain[learnKey] = takeoverGain[learnKey]?.let { (it + learned) / 2 } ?: learned
@@ -216,14 +232,24 @@ internal class PreviewIsoCap {
         if (setup == null) return
         val now = SystemClock.elapsedRealtime()
         lastZoomMs = now
-        if (manual && session != null) leaveManual(session, now)
     }
 
     /** The physical lens in use; a switch counts as zoom activity too. */
     @Synchronized
-    fun onPhysicalLens(id: String) {
-        if (lastPhysicalId != null && lastPhysicalId != id) lastZoomMs = SystemClock.elapsedRealtime()
+    fun onPhysicalLens(id: String, session: Camera2Session) {
+        val previous = lastPhysicalId
         lastPhysicalId = id
+        if (previous == null || previous == id) return
+        val now = SystemClock.elapsedRealtime()
+        lastZoomMs = now
+        val active = controller
+        if (!manual || active == null) return
+        // The same exposure gives another brightness on the new lens (aperture, sensor). Apply what an earlier
+        // switch between these lenses taught, now; the first frames on the new lens then confirm or refine it.
+        lensPair = "$previous>$id"
+        lensUsedGain = lensGain[lensPair] ?: 1.0
+        command(session, active.scaleExposure(lensUsedGain))
+        lensSnapAtMs = now + LENS_SNAP_AFTER_MS
     }
 
     private fun leaveManual(session: Camera2Session, now: Long) {
@@ -324,7 +350,8 @@ internal class PreviewIsoCap {
         const val REANCHOR_AFTER_MS = 150L
         const val NATIVE_FAIL_FRACTION = 1.15
         const val NATIVE_FAIL_AFTER_MS = 600L
-        const val GAIN_MIN = 0.3
+        const val LENS_SNAP_AFTER_MS = 130L
+        const val GAIN_MIN = 0.1
         const val GAIN_MAX = 10.0
         const val SEED_ISO = 400
     }
