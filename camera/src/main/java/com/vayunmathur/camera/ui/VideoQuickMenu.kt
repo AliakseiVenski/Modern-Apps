@@ -115,15 +115,6 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     )
                 }
 
-                if (opts?.hdrSupported == true) {
-                    ToggleCard(
-                        title = stringResource(R.string.settings_video_hdr),
-                        subtitle = stringResource(R.string.settings_video_hdr_short),
-                        checked = tuning.hdr,
-                        onCheckedChange = { viewModel.setVideoHdr(it) },
-                    )
-                }
-
                 if (opts != null && opts.isoStops.isNotEmpty()) {
                     ToggleCard(
                         title = stringResource(R.string.settings_video_shutter_lock),
@@ -141,6 +132,15 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                             isoChoices.asReversed().map { it to it.toString() },
                         selected = tuning.isoLimit,
                         onSelect = { viewModel.setVideoIsoLimit(it) },
+                    )
+                }
+
+                if (opts?.hdrSupported == true) {
+                    ToggleCard(
+                        title = stringResource(R.string.settings_video_hdr),
+                        subtitle = stringResource(R.string.settings_video_hdr_short),
+                        checked = tuning.hdr,
+                        onCheckedChange = { viewModel.setVideoHdr(it) },
                     )
                 }
 

@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.vayunmathur.camera.data.MediaStoreSaver
+import com.vayunmathur.camera.data.onActiveLens
 import com.vayunmathur.camera.data.saveProcessedStill
 import com.vayunmathur.camera.data.saveStillBytes
 import com.vayunmathur.camera.data.setLastCaptureUri
@@ -51,8 +52,11 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
     }
     activeCamera2Session = session
     if (session != null) {
+        // A single camera is its own lens; a logical multi-camera reports which physical lens is active.
+        if (!session.characteristics.isLogicalMultiCamera) onActiveLens(session.characteristics.cameraId)
         session.previewFrameObserver = { raw ->
             debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
+            raw.physicalCameraId?.let { onActiveLens(it) }
         }
         applyVideoPreviewParams()
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }

@@ -298,6 +298,15 @@ fun CameraViewModel.setBlurStrength(value: Float) {
 
 fun CameraViewModel.setExposureCompensation(value: Float) {
     exposureCompensationMutable.value = value
+    val key = activeLensKey ?: return
+    viewModelScope.launch { ds.setString("camera_exposure_comp_$key", value.toString()) }
+}
+
+/** The brightness slider is kept per lens: switching lens (or restarting) brings back that lens's setting. */
+internal fun CameraViewModel.onActiveLens(key: String) {
+    if (key == activeLensKey) return
+    activeLensKey = key
+    exposureCompensationMutable.value = ds.getString("camera_exposure_comp_$key")?.toFloatOrNull() ?: 0f
 }
 
 fun CameraViewModel.setWarmth(value: Float) {

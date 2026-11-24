@@ -72,6 +72,7 @@ Starting a take does not reopen the camera. In the video modes the viewfinder is
 ### 3.4 Panels and settings
 - Quick panel (Tune button): resolution, frame rate, stabilization, HDR, ISO limit, debug overlay (`ui/VideoQuickMenu.kt`). Options load when the session registers, so it opens complete.
 - Settings are grouped into Video, Photo, Photo and video, System, with thin dividers (`ui/SettingsPage.kt`).
+- The brightness slider (exposure compensation) is saved per lens and restored on restart: the key is the active physical camera id from the frame results (or the camera id on a single camera) (`data/CameraSettings.kt`, `onActiveLens`).
 - Remember last used mode; Motion Photo switch (off by default).
 - Debug overlay (off by default): measured vs target fps, shutter, ISO, focal length, cap state, resolution, codec, bitrate, stabilization.
 

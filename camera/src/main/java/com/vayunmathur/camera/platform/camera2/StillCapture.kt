@@ -33,6 +33,8 @@ data class RawStillMetadata(
     val flashState: Int? = null,
     /** `COLOR_CORRECTION_GAINS` (R, G-even, G-odd, B) for RAW linearisation. */
     val colorCorrectionGains: List<Float>? = null,
+    /** The physical camera behind a logical multi-camera right now (null on a single camera). */
+    val physicalCameraId: String? = null,
 )
 
 /**

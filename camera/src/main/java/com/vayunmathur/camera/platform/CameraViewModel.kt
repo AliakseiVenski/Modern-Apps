@@ -374,6 +374,10 @@ class CameraViewModel(internal val app: Application) : AndroidViewModel(app) {
     val blurStrength = blurStrengthMutable.asStateFlow()
 
     internal val exposureCompensationMutable = MutableStateFlow(0f)
+
+    /** The lens the brightness slider belongs to right now (physical camera id, or the camera's id when single). */
+    @Volatile
+    internal var activeLensKey: String? = null
     val exposureCompensation = exposureCompensationMutable.asStateFlow()
 
     internal val warmthMutable = MutableStateFlow(0f)
