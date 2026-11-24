@@ -27,6 +27,8 @@ internal class PreviewIsoCap {
     private var lastAutoLumaMs = 0L
     private var commandedProduct = 0.0
     private var commandedAtMs = 0L
+    private var baselineResult = 0.0
+    private var expectedChange = 1.0
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -36,6 +38,8 @@ internal class PreviewIsoCap {
         controller = null
         lastMs = 0L
         commandedProduct = 0.0
+        baselineResult = 0.0
+        expectedChange = 1.0
         status.value = newSetup?.let { "ISO cap ${it.isoLimit}: waiting for analysis frames" }
     }
 
@@ -89,8 +93,11 @@ internal class PreviewIsoCap {
 
     private fun command(session: Camera2Session, setting: ExposureSetting, now: Long) {
         session.setIsoCap(setting.timeNanos, setting.iso)
-        commandedProduct = setting.timeNanos.toDouble() * setting.iso
+        val product = setting.timeNanos.toDouble() * setting.iso
+        expectedChange = if (commandedProduct > 0.0) product / commandedProduct else 1.0
+        commandedProduct = product
         commandedAtMs = now
+        baselineResult = resultProduct(session)
     }
 
     /**
@@ -101,9 +108,18 @@ internal class PreviewIsoCap {
      */
     private fun commandLanded(session: Camera2Session, now: Long): Boolean {
         if (commandedProduct <= 0.0 || now - commandedAtMs >= SETTLE_TIMEOUT_MS) return true
+        val expected = kotlin.math.ln(expectedChange)
+        if (kotlin.math.abs(expected) < MIN_SETTLE_LOG) return true
+        val current = resultProduct(session)
+        if (baselineResult <= 0.0 || current <= 0.0) return false
+        // Judged by how far the reported exposure has moved, not by its absolute value: the camera reports
+        // its own scale (ISP gain), which differs from the request, but it follows the request's changes.
+        return kotlin.math.ln(current / baselineResult) / expected >= SETTLE_PROGRESS
+    }
+
+    private fun resultProduct(session: Camera2Session): Double {
         val (time, iso) = session.latestAeSnapshot()
-        if (time == null || iso == null) return false
-        return kotlin.math.abs(time.toDouble() * iso / commandedProduct - 1.0) <= SETTLE_TOLERANCE
+        return if (time == null || iso == null) 0.0 else time.toDouble() * iso
     }
 
     /** Without a cap the overlay still shows the frame's luma, to compare Auto with a limit. */
@@ -159,8 +175,9 @@ internal class PreviewIsoCap {
         const val LUMA_GAMMA = 2.2
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val INTERVAL_MS = 33L
-        const val SETTLE_TIMEOUT_MS = 250L
-        const val SETTLE_TOLERANCE = 0.05
+        const val SETTLE_TIMEOUT_MS = 150L
+        const val SETTLE_PROGRESS = 0.75
+        const val MIN_SETTLE_LOG = 0.03
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 85.0
         const val ANCHOR_MAX_LUMA = 125.0
