@@ -116,6 +116,8 @@ class PreviewSurfaceBridge(
 
     /** SurfaceView path (HDR viewfinder): the holder owns the [Surface], so it is never released here. */
     fun attachTo(view: SurfaceView) {
+        // A SurfaceView sizes its buffer to the view; pin it to the camera buffer (stretched to the 9:16 box).
+        bufferSize?.let { view.holder.setFixedSize(it.width, it.height) }
         view.holder.addCallback(this)
         val holderSurface = view.holder.surface
         if (holderSurface.isValid && state.surface == null) {

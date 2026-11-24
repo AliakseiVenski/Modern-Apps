@@ -31,11 +31,20 @@ class ShutterPriorityController(
     /** Feeds one metered frame [dtSeconds] after the previous; returns the new setting when it moved, else null. */
     fun update(meanLuma: Double, dtSeconds: Double): ExposureSetting? {
         val luma = meanLuma.coerceAtLeast(MIN_LUMA)
-        smoothedLuma = if (smoothedLuma < 0) luma else smoothedLuma + (luma - smoothedLuma) * (1 - exp(-dtSeconds / LUMA_TAU))
+        val first = smoothedLuma < 0
+        smoothedLuma = when {
+            first -> luma
+            // A scene cut (dark to bright or back): trust the new reading now instead of waiting out the filter.
+            luma > smoothedLuma * CUT_RATIO || luma < smoothedLuma / CUT_RATIO -> luma
+            else -> smoothedLuma + (luma - smoothedLuma) * (1 - exp(-dtSeconds / LUMA_TAU))
+        }
         val errorStops = GAMMA * log2(TARGET_LUMA / smoothedLuma)
         if (abs(errorStops) < DEADBAND_STOPS) return null
-        val maxStep = MAX_STOPS_PER_SECOND * dtSeconds
-        val step = (errorStops * (1 - exp(-dtSeconds / EXPOSURE_TAU))).coerceIn(-maxStep, maxStep)
+        // The first reading corrects at once (a camera just opened has no exposure to glide from);
+        // after that the rate grows with the error, so a big change is quick and a small one is smooth.
+        val maxStep = if (first) FIRST_STEP_MAX_STOPS else stopsPerSecond(abs(errorStops)) * dtSeconds
+        val response = if (first) 1.0 else 1 - exp(-dtSeconds / EXPOSURE_TAU)
+        val step = (errorStops * response).coerceIn(-maxStep, maxStep)
         exposure = clamp(exposure * 2.0.pow(step))
         val next = split(exposure)
         if (next == current) return null
@@ -44,6 +53,9 @@ class ShutterPriorityController(
     }
 
     private fun log2(x: Double) = ln(x) / ln(2.0)
+
+    private fun stopsPerSecond(errorStops: Double): Double =
+        BASE_STOPS_PER_SECOND + (MAX_STOPS_PER_SECOND - BASE_STOPS_PER_SECOND) * minOf(errorStops / FAST_ERROR_STOPS, 1.0)
 
     private fun clamp(x: Double) = x.coerceIn(MIN_TIME_NANOS * isoMin, frameNanos.toDouble() * isoMax)
 
@@ -60,7 +72,11 @@ class ShutterPriorityController(
         private const val GAMMA = 2.2
         private const val LUMA_TAU = 0.15
         private const val EXPOSURE_TAU = 0.5
-        private const val MAX_STOPS_PER_SECOND = 2.0
+        private const val BASE_STOPS_PER_SECOND = 2.0
+        private const val MAX_STOPS_PER_SECOND = 8.0
+        private const val FAST_ERROR_STOPS = 4.0
+        private const val FIRST_STEP_MAX_STOPS = 8.0
+        private const val CUT_RATIO = 1.6
         private const val DEADBAND_STOPS = 0.08
         private const val MIN_TIME_NANOS = 50_000.0
     }

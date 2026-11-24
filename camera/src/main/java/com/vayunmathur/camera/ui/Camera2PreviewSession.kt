@@ -97,10 +97,10 @@ internal class Camera2PreviewSession(
 
     /**
      * Video viewfinder camera buffer: the encoder's 16:9, since HALs stabilize (EIS) only when the
-     * preview and video streams agree. The HDR SurfaceView path keeps the view's size.
+     * preview and video streams agree. The HDR SurfaceView is pinned to it too (setFixedSize).
      */
     private val videoBuffer: FrameSize? =
-        if (videoPreview && !hdrPreview) FrameSize(VIDEO_BUFFER_WIDTH, VIDEO_BUFFER_HEIGHT) else null
+        if (videoPreview) FrameSize(VIDEO_BUFFER_WIDTH, VIDEO_BUFFER_HEIGHT) else null
 
     private fun previewRequest(width: Int, height: Int): FrameSize = videoBuffer ?: FrameSize(width, height)
 

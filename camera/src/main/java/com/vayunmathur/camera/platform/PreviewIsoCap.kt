@@ -2,6 +2,7 @@ package com.vayunmathur.camera.platform
 
 import android.os.SystemClock
 import com.vayunmathur.camera.domain.ExposureSetting
+import kotlin.math.roundToInt
 import com.vayunmathur.camera.domain.HighlightMetering
 import com.vayunmathur.camera.domain.LumaPlaneMath
 import com.vayunmathur.camera.domain.PlaneView
@@ -57,10 +58,7 @@ internal class PreviewIsoCap {
         // or darker target. Luma follows exposure^(1/2.2), so +1 EV lowers the reading by 2^(1/2.2).
         val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
         val frameNanos = NANOS_PER_SECOND / cap.fps
-        val active = controller ?: ShutterPriorityController(
-            frameNanos, cap.isoMin, cap.isoLimit,
-            ExposureSetting(frameNanos, SEED_ISO.coerceIn(cap.isoMin, cap.isoLimit)),
-        ).also {
+        val active = controller ?: ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, seed(session, frameNanos)).also {
             controller = it
             session.setIsoCap(it.current.timeNanos, it.current.iso)
         }
@@ -74,6 +72,18 @@ internal class PreviewIsoCap {
             snapshot.postRawBoostRange?.upper ?: com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST,
         )
         status.value = "ISO cap ${cap.isoLimit}: ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
+    }
+
+    /**
+     * Where the exposure starts: what the camera's own AE is using right now, so the viewfinder picks up
+     * from the scene it already shows instead of climbing from a fixed ISO. A fixed seed only when no
+     * frame result has arrived yet.
+     */
+    private fun seed(session: Camera2Session, frameNanos: Long): ExposureSetting {
+        val (timeNs, iso) = session.latestAeSnapshot()
+        if (timeNs == null || iso == null || timeNs <= 0L || iso <= 0) return ExposureSetting(frameNanos, SEED_ISO)
+        // One frame of shutter with the equal total exposure; the controller clamps and splits it.
+        return ExposureSetting(frameNanos, (timeNs.toDouble() * iso / frameNanos).roundToInt().coerceAtLeast(1))
     }
 
     /** Mean luma of the tapped AE window on the analysis plane, or null when no point is metered. */

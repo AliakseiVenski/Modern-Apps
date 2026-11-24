@@ -51,6 +51,7 @@ class ShutterPriorityControllerTest {
 
     @Test fun suddenDarkeningRampsWithoutJumps() {
         val c = controller()
+        c.update(ShutterPriorityController.TARGET_LUMA, dt)
         var previous = c.current.iso
         var worstRatio = 1.0
         repeat(200) {
@@ -60,6 +61,21 @@ class ShutterPriorityControllerTest {
             previous = iso
         }
         assertTrue(c.current.iso > 400)
-        assertTrue(worstRatio < 1.08, "largest per-update ISO change was $worstRatio")
+        assertTrue(worstRatio < 1.4, "largest per-update ISO change was $worstRatio")
+    }
+
+    @Test fun theFirstReadingCorrectsAtOnce() {
+        val c = controller(startIso = 100)
+        val first = c.update(15.0, dt)
+        assertNotNull(first)
+        assertTrue(first.iso > 1500, "first reading only reached ${first.iso}")
+    }
+
+    @Test fun aSceneCutIsFollowedQuickly() {
+        val c = controller(startIso = 3000)
+        repeat(60) { c.update(ShutterPriorityController.TARGET_LUMA, dt) }
+        // Into a much brighter scene: well under a second (20 updates) to drop several stops.
+        repeat(20) { c.update(230.0, dt) }
+        assertTrue(c.current.iso < 800 || c.current.timeNanos < frame, "still at ${c.current}")
     }
 }
