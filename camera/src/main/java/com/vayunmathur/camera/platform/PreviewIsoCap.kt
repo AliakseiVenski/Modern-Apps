@@ -17,10 +17,10 @@ import com.vayunmathur.camera.platform.camera2.setShutterPriority
 internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int, val uncapped: Boolean = false)
 
 /**
- * The ISO limit for the live preview. The camera's own AE runs by default, so the picture is exactly Auto.
- * Only when AE would use more than one frame of shutter (the frame rate would sag) or more ISO than the
- * limit does [ShutterPriorityController] take over: AE off, shutter pinned at one frame, ISO raised to
- * keep the brightness AE had, never above the limit. When the scene is bright enough again it hands back.
+ * The shutter lock for the live preview. The camera's AE runs only until it has found the brightness
+ * (about a quarter second); then [ShutterPriorityController] holds the exposure for good: AE off, shutter at
+ * one frame (shorter in bright scenes), ISO moved to keep that brightness, never above the limit. Staying
+ * in one controller avoids the dip every AE-to-manual switch caused.
  */
 internal class PreviewIsoCap {
     private var setup: IsoCapSetup? = null
@@ -30,8 +30,8 @@ internal class PreviewIsoCap {
 
     /** True while this controller sets the exposure; false while the camera's AE does (the default). */
     private var manual = false
-    private var modeSinceMs = 0L
     private var lastPhysicalId: String? = null
+    private var startedAtMs = 0L
     private var nativeSinceMs = 0L
     private var lensPair = ""
     private var lensUsedGain = 1.0
@@ -40,7 +40,6 @@ internal class PreviewIsoCap {
     /** Exposure factor between two physical lenses ("from>to"), learned from earlier switches. */
     private val lensGain = HashMap<String, Double>()
     private var nativeFailed = false
-    private var lastZoomMs = 0L
     private var lastAeProduct = 0.0
     private var aeLuma = -1.0
     private var aeLumaAtMs = 0L
@@ -51,7 +50,6 @@ internal class PreviewIsoCap {
     /** Per lens: the exposure factor a take-over needs on top of AE's reported exposure to keep the same picture. */
     private val takeoverGain = HashMap<String, Double>()
     private var aeStableSinceMs = 0L
-    private var belowSinceMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -62,14 +60,13 @@ internal class PreviewIsoCap {
         manual = false
         nativeSinceMs = 0L
         nativeFailed = false
-        modeSinceMs = 0L
-        belowSinceMs = 0L
         lastMs = 0L
         lastAeProduct = 0.0
         aeLuma = -1.0
         aeLumaAtMs = 0L
         reanchorAtMs = 0L
         lensSnapAtMs = 0L
+        startedAtMs = 0L
         status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
@@ -129,16 +126,6 @@ internal class PreviewIsoCap {
             val learned = (usedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
             takeoverGain[learnKey] = takeoverGain[learnKey]?.let { (it + learned) / 2 } ?: learned
         }
-        // The scene is bright enough that a one-frame shutter is no longer the limit: hand back to the camera.
-        if (active.current.timeNanos < frameNanos * RELEASE_SHUTTER_FRACTION) {
-            if (belowSinceMs == 0L) belowSinceMs = now
-            if (now - belowSinceMs >= RELEASE_AFTER_MS && now - modeSinceMs >= DWELL_MS) {
-                leaveManual(session, now)
-                return
-            }
-        } else {
-            belowSinceMs = 0L
-        }
         val snapshot = session.characteristics
         val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
             active.current.iso,
@@ -171,16 +158,14 @@ internal class PreviewIsoCap {
             aeLuma = if (aeLuma < 0.0) metered else aeLuma + (metered - aeLuma) * (1 - kotlin.math.exp(-dt / AE_LUMA_TAU))
             aeLumaAtMs = now
         }
-        val violating = time >= frameNanos * VIOLATION_SHUTTER_FRACTION
-        val needsCap = time >= frameNanos * ENTER_SHUTTER_FRACTION || iso > cap.isoLimit
-        status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso"
-        if (!needsCap || (!violating && now - modeSinceMs < DWELL_MS)) return
-        // After a zoom or lens change the camera's AE is still finding the brightness: let it settle first.
-        if (now - lastZoomMs < ZOOM_QUIET_MS || now - aeStableSinceMs < AE_STABLE_MS) return
+        status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso, starting"
+        // Once the camera's AE has found the brightness (or after a moment), take over for good: no later
+        // switching between AE and the held exposure, which is where the picture used to dip.
+        if (startedAtMs == 0L) startedAtMs = now
+        val settled = now - aeStableSinceMs >= AE_STABLE_MS || now - startedAtMs >= START_TIMEOUT_MS
+        if (!settled) return
         if (session.aeLocked || aeLuma < 0.0) return
         manual = true
-        modeSinceMs = now
-        belowSinceMs = 0L
         lastMs = 0L
         // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
         val anchor = aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
@@ -221,27 +206,13 @@ internal class PreviewIsoCap {
         }
     }
 
-    /**
-     * Zoom moves (a lens change is a zoom move). The same shutter and ISO give very different brightness on
-     * another lens (aperture, sensor), and only the camera's AE, running through the switch, carries the
-     * brightness across it as the stock app does. So the exposure goes back to AE as the zoom starts, and
-     * the held exposure resumes only after the zoom has been quiet and AE has settled.
-     */
-    @Synchronized
-    fun onZoomChange(session: Camera2Session?) {
-        if (setup == null) return
-        val now = SystemClock.elapsedRealtime()
-        lastZoomMs = now
-    }
-
-    /** The physical lens in use; a switch counts as zoom activity too. */
+    /** The physical lens in use: a switch scales the held exposure by the factor learned for that lens pair. */
     @Synchronized
     fun onPhysicalLens(id: String, session: Camera2Session) {
         val previous = lastPhysicalId
         lastPhysicalId = id
         if (previous == null || previous == id) return
         val now = SystemClock.elapsedRealtime()
-        lastZoomMs = now
         val active = controller
         if (!manual || active == null) return
         // The same exposure gives another brightness on the new lens (aperture, sensor). Apply what an earlier
@@ -250,14 +221,6 @@ internal class PreviewIsoCap {
         lensUsedGain = lensGain[lensPair] ?: 1.0
         command(session, active.scaleExposure(lensUsedGain))
         lensSnapAtMs = now + LENS_SNAP_AFTER_MS
-    }
-
-    private fun leaveManual(session: Camera2Session, now: Long) {
-        manual = false
-        controller = null
-        modeSinceMs = now
-        belowSinceMs = 0L
-        session.setIsoCap(null, null)
     }
 
     /** A tapped point meters its own window (as the HAL's AE does), else the whole frame. */
@@ -334,17 +297,9 @@ internal class PreviewIsoCap {
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0
         const val MAX_GAP_MS = 200L
-        /** Camera AE at this share of a frame's shutter or more: it is about to cost frame rate. */
-        const val ENTER_SHUTTER_FRACTION = 0.9
-        /** At this share or more it already has: take over without waiting out the dwell. */
-        const val VIOLATION_SHUTTER_FRACTION = 1.2
-        /** Back to the camera's AE once the held exposure needs well under a frame of shutter. */
-        const val RELEASE_SHUTTER_FRACTION = 0.7
-        const val RELEASE_AFTER_MS = 400L
-        const val DWELL_MS = 1500L
-        /** The held exposure resumes only this long after the last zoom move, and once AE's exposure has held still. */
-        const val ZOOM_QUIET_MS = 700L
         const val AE_STABLE_MS = 250L
+        /** The held exposure starts after this long at the latest, even if AE is still moving. */
+        const val START_TIMEOUT_MS = 1500L
         const val AE_STABLE_TOLERANCE = 0.05
         const val AE_LUMA_TAU = 0.2
         const val REANCHOR_AFTER_MS = 150L
