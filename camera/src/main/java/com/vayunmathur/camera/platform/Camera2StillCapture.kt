@@ -57,7 +57,7 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
         session.previewFrameObserver = { raw ->
             debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
             raw.physicalCameraId?.let {
-                previewIsoCap.onPhysicalLens(it, session)
+                previewIsoCap.onPhysicalLens(it)
                 onActiveLens(it)
             }
         }

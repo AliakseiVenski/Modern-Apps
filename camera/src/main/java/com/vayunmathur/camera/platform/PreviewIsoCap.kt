@@ -31,6 +31,9 @@ internal class PreviewIsoCap {
     private var manual = false
     private var modeSinceMs = 0L
     private var lastPhysicalId: String? = null
+    private var lastZoomMs = 0L
+    private var lastAeProduct = 0.0
+    private var aeStableSinceMs = 0L
     private var belowSinceMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
@@ -43,6 +46,7 @@ internal class PreviewIsoCap {
         modeSinceMs = 0L
         belowSinceMs = 0L
         lastMs = 0L
+        lastAeProduct = 0.0
         status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
@@ -106,10 +110,15 @@ internal class PreviewIsoCap {
             status.value = "ISO limit ${cap.isoLimit}: waiting for the camera"
             return
         }
+        val product = time.toDouble() * iso
+        if (lastAeProduct <= 0.0 || kotlin.math.abs(product / lastAeProduct - 1.0) > AE_STABLE_TOLERANCE) aeStableSinceMs = now
+        lastAeProduct = product
         val violating = time >= frameNanos * VIOLATION_SHUTTER_FRACTION
         val needsCap = time >= frameNanos * ENTER_SHUTTER_FRACTION || iso > cap.isoLimit
         status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso"
         if (!needsCap || (!violating && now - modeSinceMs < DWELL_MS)) return
+        // After a zoom or lens change the camera's AE is still finding the brightness: let it settle first.
+        if (now - lastZoomMs < ZOOM_QUIET_MS || now - aeStableSinceMs < AE_STABLE_MS) return
         if (session.aeLocked) return
         val metered = meter(plane, session) ?: return
         manual = true
@@ -120,18 +129,24 @@ internal class PreviewIsoCap {
     }
 
     /**
-     * A lens change changes how much light the same shutter and ISO give (aperture, sensor), so a held
-     * exposure is wrong on the new lens and the picture jumps. The camera's AE knows the lenses: hand
-     * over to it at once, and take the exposure back from its result a moment later (see [watchCameraAe]).
+     * Zoom moves (a lens change is a zoom move). The same shutter and ISO give very different brightness on
+     * another lens (aperture, sensor), and only the camera's AE, running through the switch, carries the
+     * brightness across it as the stock app does. So the exposure goes back to AE as the zoom starts, and
+     * the held exposure resumes only after the zoom has been quiet and AE has settled.
      */
     @Synchronized
-    fun onPhysicalLens(id: String, session: Camera2Session) {
-        val previous = lastPhysicalId
-        lastPhysicalId = id
-        if (previous == null || previous == id || !manual || setup == null) return
+    fun onZoomChange(session: Camera2Session?) {
+        if (setup == null) return
         val now = SystemClock.elapsedRealtime()
-        leaveManual(session, now)
-        modeSinceMs = now - DWELL_MS + LENS_REENTRY_MS
+        lastZoomMs = now
+        if (manual && session != null) leaveManual(session, now)
+    }
+
+    /** The physical lens in use; a switch counts as zoom activity too. */
+    @Synchronized
+    fun onPhysicalLens(id: String) {
+        if (lastPhysicalId != null && lastPhysicalId != id) lastZoomMs = SystemClock.elapsedRealtime()
+        lastPhysicalId = id
     }
 
     private fun leaveManual(session: Camera2Session, now: Long) {
@@ -224,8 +239,10 @@ internal class PreviewIsoCap {
         const val RELEASE_SHUTTER_FRACTION = 0.7
         const val RELEASE_AFTER_MS = 400L
         const val DWELL_MS = 1500L
-        /** After a lens change the camera's AE gets this long before the held exposure may resume. */
-        const val LENS_REENTRY_MS = 350L
+        /** The held exposure resumes only this long after the last zoom move, and once AE's exposure has held still. */
+        const val ZOOM_QUIET_MS = 700L
+        const val AE_STABLE_MS = 250L
+        const val AE_STABLE_TOLERANCE = 0.05
         const val SEED_ISO = 400
     }
 }

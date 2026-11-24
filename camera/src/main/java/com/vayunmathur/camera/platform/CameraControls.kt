@@ -44,6 +44,7 @@ private const val ZOOM_GLIDE_MIN_OCTAVES = 0.07f
 fun CameraViewModel.setZoomRatio(ratio: Float, smooth: Boolean = false) {
     camera2RecordingState.zoomGlide?.cancel()
     camera2RecordingState.zoomGlide = null
+    previewIsoCap.onZoomChange(activeCamera2Session)
     val range = (activeCamera2Session?.characteristics ?: recordingCameraSnapshot()?.second)?.zoomRatioRange
     val target = if (range != null) ratio.coerceIn(range.lower, range.upper) else ratio
     val from = zoomRatioMutable.value
@@ -69,6 +70,7 @@ fun CameraViewModel.setZoomRatio(ratio: Float, smooth: Boolean = false) {
 
 /** One frame of a glide: reaches the camera and the zoom bar, nothing persisted. */
 private fun CameraViewModel.pushZoomRatio(ratio: Float) {
+    previewIsoCap.onZoomChange(activeCamera2Session)
     zoomRatioMutable.value = ratio
     camera2RecordingState.engine?.setZoomRatio(ratio)
     activeCamera2Session?.setZoomRatio(ratio)
