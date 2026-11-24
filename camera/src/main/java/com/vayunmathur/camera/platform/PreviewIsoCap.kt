@@ -24,6 +24,7 @@ internal class PreviewIsoCap {
     private var setup: IsoCapSetup? = null
     private var controller: ShutterPriorityController? = null
     private var lastMs = 0L
+    private var lastAutoLumaMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -41,7 +42,7 @@ internal class PreviewIsoCap {
     /** One analysis frame of the preview. */
     @Synchronized
     fun onYPlane(plane: PlaneView, session: Camera2Session?) {
-        val cap = setup ?: return
+        val cap = setup ?: return publishAutoLuma(plane)
         session ?: return
         if (session.aeLocked) {
             status.value = "ISO cap ${cap.isoLimit}: AE locked"
@@ -58,7 +59,7 @@ internal class PreviewIsoCap {
         // or darker target. Luma follows exposure^(1/2.2), so +1 EV lowers the reading by 2^(1/2.2).
         val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
         val frameNanos = NANOS_PER_SECOND / cap.fps
-        val active = controller ?: ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, seed(session, frameNanos)).also {
+        val active = controller ?: newController(cap, frameNanos, session, metered).also {
             controller = it
             session.setIsoCap(it.current.timeNanos, it.current.iso)
         }
@@ -72,6 +73,25 @@ internal class PreviewIsoCap {
             snapshot.postRawBoostRange?.upper ?: com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST,
         )
         status.value = "ISO cap ${cap.isoLimit}: ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
+    }
+
+    /**
+     * Starts the controller where the camera's own AE is, and holds the brightness that AE had made (within
+     * sane bounds): limiting the ISO then keeps the picture as it was instead of re-judging the scene.
+     */
+    private fun newController(cap: IsoCapSetup, frameNanos: Long, session: Camera2Session, metered: Double): ShutterPriorityController {
+        val aeKnown = session.latestAeSnapshot().let { (time, iso) -> time != null && iso != null && time > 0L && iso > 0 }
+        val target = if (aeKnown) metered.coerceIn(ANCHOR_MIN_LUMA, ANCHOR_MAX_LUMA) else ShutterPriorityController.TARGET_LUMA
+        return ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, seed(session, frameNanos), target)
+    }
+
+    /** Without a cap the overlay still shows the frame's luma, to compare Auto with a limit. */
+    private fun publishAutoLuma(plane: PlaneView) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAutoLumaMs < AUTO_LUMA_INTERVAL_MS) return
+        lastAutoLumaMs = now
+        val luma = LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) } ?: return
+        status.value = "Auto ISO: luma ${luma.toInt()}"
     }
 
     /**
@@ -117,7 +137,10 @@ internal class PreviewIsoCap {
         const val WINDOW_STEP = 4
         const val LUMA_GAMMA = 2.2
         const val NANOS_PER_SECOND = 1_000_000_000L
-        const val INTERVAL_MS = 50L
+        const val INTERVAL_MS = 33L
+        const val AUTO_LUMA_INTERVAL_MS = 300L
+        const val ANCHOR_MIN_LUMA = 85.0
+        const val ANCHOR_MAX_LUMA = 125.0
         const val MAX_GAP_MS = 200L
         const val SEED_ISO = 400
     }

@@ -1,39 +1,34 @@
 package com.vayunmathur.camera.domain
 
-import kotlin.math.max
-
 /**
- * Brightness the shutter-priority controller steers by. A plain mean lets a dark surround drag the
- * exposure up until a bright light source clips (the HAL's own AE protects those highlights). This
- * keeps the mean, but never reads brighter than the highlights allow: the [HIGHLIGHT_PERCENTILE]
- * luma, scaled so that it sits at [HIGHLIGHT_CEILING] when the mean is on target, acts as a floor on
- * the metered value. A clipped light source then pulls the exposure down until it just stops clipping.
+ * Brightness the shutter-priority controller steers by: the frame mean, read brighter only when a real
+ * share of the frame is clipped, so the controller backs off until a blown light source recovers. A
+ * bright window or sky that is merely light (not at the ceiling) is left to the mean, which is what the
+ * camera's own AE does, so switching from Auto to an ISO limit does not darken such scenes.
  */
 object HighlightMetering {
-    const val HIGHLIGHT_PERCENTILE = 0.98
-    const val HIGHLIGHT_CEILING = 240.0
-    private const val BINS = 256
+    /** Luma at or above this counts as clipped (8-bit processed output). */
+    const val CLIP_LEVEL = 250f
+
+    /** Share of clipped pixels tolerated before the reading is pushed up. */
+    const val CLIP_ALLOWED = 0.02
+
+    /** Reading increase per unit of clipped share above [CLIP_ALLOWED]. */
+    const val CLIP_GAIN = 12.0
+
+    /** The reading never rises by more than this factor (a fully white frame is not 100x too bright). */
+    const val MAX_FACTOR = 2.5
 
     /** Metered luma (0..255 scale) for a downsampled luma [grid]; 0 for an empty grid. */
     fun effectiveLuma(grid: FloatArray): Double {
         if (grid.isEmpty()) return 0.0
         var sum = 0.0
-        val histogram = IntArray(BINS)
+        var clipped = 0
         for (value in grid) {
             sum += value
-            histogram[value.toInt().coerceIn(0, BINS - 1)]++
+            if (value >= CLIP_LEVEL) clipped++
         }
-        val mean = sum / grid.size
-        val rank = (grid.size * HIGHLIGHT_PERCENTILE).toInt()
-        var seen = 0
-        var percentile = 0
-        for (bin in 0 until BINS) {
-            seen += histogram[bin]
-            if (seen > rank) {
-                percentile = bin
-                break
-            }
-        }
-        return max(mean, percentile * ShutterPriorityController.TARGET_LUMA / HIGHLIGHT_CEILING)
+        val excess = (clipped.toDouble() / grid.size - CLIP_ALLOWED).coerceAtLeast(0.0)
+        return sum / grid.size * (1.0 + CLIP_GAIN * excess).coerceAtMost(MAX_FACTOR)
     }
 }

@@ -64,6 +64,12 @@ class ShutterPriorityControllerTest {
         assertTrue(worstRatio < 1.4, "largest per-update ISO change was $worstRatio")
     }
 
+    @Test fun anAnchoredTargetHoldsThatLumaInsteadOfTheDefault() {
+        val c = ShutterPriorityController(frame, 50, 3200, ExposureSetting(frame, 400), targetLuma = 120.0)
+        assertNull(c.update(120.0, dt))
+        assertNotNull(c.update(105.0, dt))
+    }
+
     @Test fun theFirstReadingCorrectsAtOnce() {
         val c = controller(startIso = 100)
         val first = c.update(15.0, dt)

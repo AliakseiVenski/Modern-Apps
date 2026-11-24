@@ -21,6 +21,8 @@ class ShutterPriorityController(
     private val isoMin: Int,
     private val isoMax: Int,
     start: ExposureSetting,
+    /** Luma to hold; the viewfinder anchors it to the look the camera's own AE had when the cap began. */
+    private val targetLuma: Double = TARGET_LUMA,
 ) {
     private var exposure = clamp(start.timeNanos.toDouble() * start.iso)
     private var smoothedLuma = -1.0
@@ -38,7 +40,7 @@ class ShutterPriorityController(
             luma > smoothedLuma * CUT_RATIO || luma < smoothedLuma / CUT_RATIO -> luma
             else -> smoothedLuma + (luma - smoothedLuma) * (1 - exp(-dtSeconds / LUMA_TAU))
         }
-        val errorStops = GAMMA * log2(TARGET_LUMA / smoothedLuma)
+        val errorStops = GAMMA * log2(targetLuma / smoothedLuma)
         if (abs(errorStops) < DEADBAND_STOPS) return null
         // The first reading corrects at once (a camera just opened has no exposure to glide from);
         // after that the rate grows with the error, so a big change is quick and a small one is smooth.

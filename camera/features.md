@@ -46,8 +46,9 @@ Starting a take does not reopen the camera. In the video modes the viewfinder is
 
 - Software AE: AE off, `SENSOR_EXPOSURE_TIME` = one frame, `SENSOR_FRAME_DURATION` pinned (`platform/camera2/Camera2Driver.kt`).
 - `domain/ShutterPriorityController.kt`: steers metered luma to a target. Smooth for small errors (about 2 stops/s), faster for large ones (up to 8 stops/s), trusts a scene cut at once, and the first reading corrects in one step.
-- `platform/PreviewIsoCap.kt`: feeds it from the analysis Y plane at about 20 Hz; seeded from the camera's own AE exposure so the viewfinder opens at the scene's brightness.
-- `domain/HighlightMetering.kt`: metered value is max(mean, 98th percentile scaled to a 240 ceiling), so a bright light source is not blown out by a dark surround.
+- `platform/PreviewIsoCap.kt`: feeds it from the analysis Y plane at about 30 Hz; seeded from the camera's own AE exposure so the viewfinder opens at the scene's brightness.
+- `domain/HighlightMetering.kt`: metered value is the frame mean, lifted only when more than 2 % of the frame is clipped, so a blown light source is backed off while a merely bright window is left to the mean (as the camera's AE does).
+- The controller anchors its target luma to the look the camera's AE had when the cap started (clamped 85-125), so switching Auto to an ISO limit keeps the picture. Updates run at about 30 Hz so ISO changes in small steps. With no cap, the debug overlay shows the frame's luma for comparison.
 - `domain/IsoSplit.kt`: ISO above the sensor range is sent as `CONTROL_POST_RAW_SENSITIVITY_BOOST`; the picker reaches 12800 / 25600 where the HAL has a boost range. Overlay and EXIF ISO include the boost.
 - Exposure compensation shifts the controller's target by 2^(EV/2.2). Tap meters its own window; long press freezes the controller.
 - The same controller runs in the old engine fallback.
