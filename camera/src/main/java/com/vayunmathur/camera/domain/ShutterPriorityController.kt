@@ -26,6 +26,7 @@ class ShutterPriorityController(
 ) {
     private var exposure = clamp(start.timeNanos.toDouble() * start.iso)
     private var smoothedLuma = -1.0
+    private var settled = false
 
     var current: ExposureSetting = split(exposure)
         private set
@@ -64,6 +65,11 @@ class ShutterPriorityController(
     fun steer(frameExposure: Double, meanLuma: Double, dtSeconds: Double): ExposureSetting? {
         val luma = meanLuma.coerceAtLeast(MIN_LUMA)
         val errorStops = (STEER_GAMMA * log2(targetLuma / luma)).coerceIn(-MAX_ERROR_STOPS, MAX_ERROR_STOPS)
+        // Hysteresis, as camera AEs do: once on target, small wobbles (noise, a light flickering in and out of
+        // clipping) are left alone; only a real change starts it moving again, and it then settles fully.
+        if (settled && abs(errorStops) < SETTLE_ENTER_STOPS) return null
+        settled = abs(errorStops) < SETTLE_EXIT_STOPS
+        if (settled) return null
         val desired = clamp(frameExposure * 2.0.pow(errorStops))
         val gap = log2(desired / exposure)
         if (abs(gap) < STEER_DEADBAND_STOPS) return null
@@ -120,6 +126,8 @@ class ShutterPriorityController(
         private const val STEER_TAU = 0.12
         private const val STEER_DEADBAND_STOPS = 0.04
         private const val CUT_STOPS = 1.0
+        private const val SETTLE_ENTER_STOPS = 0.2
+        private const val SETTLE_EXIT_STOPS = 0.05
         private const val DEADBAND_STOPS = 0.08
         private const val MIN_TIME_NANOS = 50_000.0
     }

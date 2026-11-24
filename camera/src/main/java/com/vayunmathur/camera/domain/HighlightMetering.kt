@@ -9,6 +9,7 @@ package com.vayunmathur.camera.domain
 object HighlightMetering {
     /** Luma at or above this counts as clipped (8-bit processed output). */
     const val CLIP_LEVEL = 250f
+    const val CLIP_START = 235f
 
     /** Share of clipped pixels tolerated before the reading is pushed up. */
     const val CLIP_ALLOWED = 0.05
@@ -26,12 +27,14 @@ object HighlightMetering {
     fun effectiveLuma(grid: FloatArray): Double {
         if (grid.isEmpty()) return 0.0
         var sum = 0.0
-        var clipped = 0
+        var clipped = 0.0
         for (value in grid) {
             sum += value
-            if (value >= CLIP_LEVEL) clipped++
+            // A soft edge, not a threshold: a pixel counts as clipped gradually from CLIP_START to CLIP_LEVEL, so
+            // a bright window drifting around the clip level does not flip the reading (that made it oscillate).
+            clipped += ((value - CLIP_START) / (CLIP_LEVEL - CLIP_START)).coerceIn(0f, 1f)
         }
-        val excess = (clipped.toDouble() / grid.size - CLIP_ALLOWED).coerceAtLeast(0.0)
+        val excess = (clipped / grid.size - CLIP_ALLOWED).coerceAtLeast(0.0)
         return sum / grid.size * (1.0 + CLIP_GAIN * excess).coerceAtMost(MAX_FACTOR)
     }
 }

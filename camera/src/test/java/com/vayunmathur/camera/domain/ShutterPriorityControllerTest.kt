@@ -80,6 +80,17 @@ class ShutterPriorityControllerTest {
         assertTrue(first.iso > 2500, "only reached ${first.iso}")
     }
 
+    @Test fun steerIgnoresSmallWobbleOnceSettled() {
+        val c = ShutterPriorityController(frame, 50, 102_400, ExposureSetting(frame, 400), targetLuma = 100.0)
+        val e = frame.toDouble() * 400
+        assertNull(c.steer(e, 100.0, 0.033))
+        // About 0.1 stop of exposure either way: left alone.
+        assertNull(c.steer(e, 104.0, 0.033))
+        assertNull(c.steer(e, 96.0, 0.033))
+        // A real change moves it.
+        assertNotNull(c.steer(e, 70.0, 0.033))
+    }
+
     @Test fun steerHoldsStillOnTarget() {
         val c = ShutterPriorityController(frame, 50, 102_400, ExposureSetting(frame, 400), targetLuma = 100.0)
         assertNull(c.steer(frame.toDouble() * 400, 100.5, 0.033))
