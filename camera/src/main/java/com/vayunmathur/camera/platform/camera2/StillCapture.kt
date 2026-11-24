@@ -37,6 +37,8 @@ data class RawStillMetadata(
     val physicalCameraId: String? = null,
     /** `CONTROL_ZOOM_RATIO` this frame was taken at. */
     val zoomRatio: Float? = null,
+    /** `STATISTICS_SCENE_FLICKER`: 1 = 50 Hz lights, 2 = 60 Hz, 0 = none (reported while AE runs). */
+    val sceneFlicker: Int? = null,
 )
 
 /**

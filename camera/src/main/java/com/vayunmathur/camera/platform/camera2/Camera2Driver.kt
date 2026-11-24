@@ -382,6 +382,7 @@ internal fun TotalCaptureResult.toRawStillMetadata(): RawStillMetadata = RawStil
     flashState = get(CaptureResult.FLASH_STATE),
     physicalCameraId = get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID),
     zoomRatio = get(CaptureResult.CONTROL_ZOOM_RATIO),
+    sceneFlicker = get(CaptureResult.STATISTICS_SCENE_FLICKER),
     colorCorrectionGains = runCatching {
         get(CaptureResult.COLOR_CORRECTION_GAINS)?.let { gains ->
             listOf(gains.red, gains.greenEven, gains.greenOdd, gains.blue)

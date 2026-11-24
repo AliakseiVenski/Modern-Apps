@@ -59,6 +59,10 @@ internal class PreviewIsoCap {
      */
     private val lensAtZoom = HashMap<Pair<String, Int>, Int>()
 
+    /** Mains flicker the camera's AE detected (1 = 50 Hz, 2 = 60 Hz); assumed 50 Hz until it reports. */
+    @Volatile
+    private var flicker = FLICKER_50HZ
+
     /** Relative sensitivity of each physical lens, in stops, measured across switches. */
     private val lensStops = HashMap<String, Double>()
 
@@ -103,6 +107,7 @@ internal class PreviewIsoCap {
     /** Capture result of a preview frame (session executor thread). */
     @Synchronized
     fun onFrameResult(raw: RawStillMetadata) {
+        raw.sceneFlicker?.takeIf { it == FLICKER_50HZ || it == FLICKER_60HZ }?.let { flicker = it }
         val lens = raw.physicalCameraId
         val zoom = raw.zoomRatio
         if (lens != null && zoom != null) {
@@ -190,8 +195,12 @@ internal class PreviewIsoCap {
         // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
         val target = (aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA))
             .coerceIn(ANCHOR_MIN_LUMA, ANCHOR_MAX_LUMA)
-        val start = com.vayunmathur.camera.domain.ExposureSetting(frameNanos, (product / frameNanos).toInt().coerceAtLeast(1))
-        controller = ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, start, target).also {
+        // Longest shutter that is a whole number of mains flicker periods and still fits one frame: lamps flicker
+        // at 100/120 Hz, and a 1/60 shutter under 50 Hz light makes the picture pulse up and down (the camera's
+        // AE avoids that the same way). 1/100 at 60 fps in Europe, 1/60 (exact) in 60 Hz countries.
+        val shutter = flickerSafeShutter(frameNanos)
+        val start = com.vayunmathur.camera.domain.ExposureSetting(shutter, (product / shutter).toInt().coerceAtLeast(1))
+        controller = ShutterPriorityController(shutter, cap.isoMin, cap.isoLimit, start, target).also {
             command(session, it.current)
         }
         manual = true
@@ -311,6 +320,12 @@ internal class PreviewIsoCap {
 
     private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
 
+    private fun flickerSafeShutter(frameNanos: Long): Long {
+        val period = if (flicker == FLICKER_60HZ) NANOS_PER_SECOND / 120 else NANOS_PER_SECOND / 100
+        val periods = frameNanos / period
+        return if (periods >= 1) periods * period else frameNanos
+    }
+
     private fun zoomBucket(ratio: Float) = kotlin.math.round(ratio * 100f).toInt()
 
     /** Without a cap the overlay still shows the frame's luma, to compare Auto with the lock. */
@@ -370,7 +385,10 @@ internal class PreviewIsoCap {
         const val CALIBRATION_WINDOW_MS = 600L
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
-        const val ANCHOR_MAX_LUMA = 160.0
+        /** The held picture comes out brighter than AE's at the same analysis luma, so the anchor is capped lower. */
+        const val ANCHOR_MAX_LUMA = 115.0
+        const val FLICKER_50HZ = 1
+        const val FLICKER_60HZ = 2
         const val AE_STABLE_MS = 250L
         const val START_TIMEOUT_MS = 1500L
         const val AE_STABLE_TOLERANCE = 0.05
