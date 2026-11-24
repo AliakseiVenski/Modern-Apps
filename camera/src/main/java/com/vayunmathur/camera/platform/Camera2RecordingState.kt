@@ -21,6 +21,11 @@ internal class Camera2RecordingState {
     /** Running lens-switch zoom glide (a zoom-stop tap during a take); null when idle. */
     var zoomGlide: kotlinx.coroutines.Job? = null
 
+    /** Zoom held back behind a predicted lens switch's exposure; only the latest ratio is sent. */
+    var zoomHoldJob: kotlinx.coroutines.Job? = null
+    @Volatile
+    var heldZoomRatio = 1f
+
     /** Plan of the in-flight session take, to re-arm the next one. */
     var sessionPlan: RecorderPlan? = null
 

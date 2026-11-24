@@ -238,7 +238,9 @@ internal class PreviewIsoCap {
     @Synchronized
     fun exposureForZoom(ratio: Float): com.vayunmathur.camera.domain.ExposureSetting? {
         val active = controller ?: return null
-        if (!manual) return null
+        // One prediction per switch: a zoom glide sends a ratio every frame, and scaling the exposure again for
+        // each would compound (that blew frames out or black).
+        if (!manual || expectedLens != null) return null
         val current = lastLens ?: return null
         val target = lensZoom.entries.filter { ratio >= it.value.first - ZOOM_MARGIN && ratio <= it.value.second + ZOOM_MARGIN }
             .map { it.key }.let { if (current in it) current else it.singleOrNull() } ?: return null
@@ -248,6 +250,7 @@ internal class PreviewIsoCap {
         val now = SystemClock.elapsedRealtime()
         expectedLens = target
         expectUntilMs = now + zoomDelayMs() + EXPECT_TIMEOUT_MS
+        zoomHoldUntilMs = now + zoomDelayMs()
         val setting = active.scaleExposure(Math.pow(2.0, from - to))
         logCommand(setting, now)
         return setting
@@ -259,6 +262,10 @@ internal class PreviewIsoCap {
      */
     @Synchronized
     fun zoomDelayMs(): Long = (exposureLatencyMs - zoomLatencyMs).toLong().coerceIn(0L, MAX_ZOOM_DELAY_MS)
+
+    /** Until when zoom requests must wait so they do not overtake the predicted switch's exposure. */
+    @Volatile
+    var zoomHoldUntilMs = 0L
 
     /** The zoom of a predicted switch is going out now. */
     @Synchronized
