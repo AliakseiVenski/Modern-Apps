@@ -11,9 +11,10 @@ import com.vayunmathur.camera.platform.camera2.Camera2Controls
 import com.vayunmathur.camera.platform.camera2.Camera2Session
 import com.vayunmathur.camera.platform.camera2.aeLocked
 import com.vayunmathur.camera.platform.camera2.setIsoCap
+import com.vayunmathur.camera.platform.camera2.setShutterPriority
 
 /** The cap the viewfinder keeps while a video mode is showing: fps sets the shutter, [isoLimit] the ceiling. */
-internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int)
+internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int, val uncapped: Boolean = false)
 
 /**
  * The ISO limit for the live preview. The camera's own AE runs by default, so the picture is exactly Auto.
@@ -31,6 +32,8 @@ internal class PreviewIsoCap {
     private var manual = false
     private var modeSinceMs = 0L
     private var lastPhysicalId: String? = null
+    private var nativeSinceMs = 0L
+    private var nativeFailed = false
     private var lastZoomMs = 0L
     private var lastAeProduct = 0.0
     private var aeLuma = -1.0
@@ -51,6 +54,8 @@ internal class PreviewIsoCap {
         setup = newSetup
         controller = null
         manual = false
+        nativeSinceMs = 0L
+        nativeFailed = false
         modeSinceMs = 0L
         belowSinceMs = 0L
         lastMs = 0L
@@ -71,6 +76,12 @@ internal class PreviewIsoCap {
         session ?: return
         val now = SystemClock.elapsedRealtime()
         val frameNanos = NANOS_PER_SECOND / cap.fps
+        if (cap.uncapped && !nativeFailed && 1 in session.characteristics.aePriorityModes) {
+            nativeShutterPriority(frameNanos, session, now)
+            return
+        }
+        // Held-exposure path: make sure the native priority mode is not still set from an uncapped stretch.
+        if (session.controlState.shutterPriorityNs != null) session.setShutterPriority(null)
         if (!manual) {
             watchCameraAe(cap, frameNanos, session, plane, now)
             return
@@ -168,6 +179,30 @@ internal class PreviewIsoCap {
         // The AE's reported exposure is not what a manual request of the same size gives: once the take-over
         // has landed, re-judge against the brightness AE had and correct at once.
         reanchorAtMs = now + REANCHOR_AFTER_MS
+    }
+
+    /**
+     * With no ISO ceiling the camera does it all: AE stays on with its exposure time pinned to one frame
+     * (Android 16 shutter-priority AE), so brightness, tap, compensation and lens switches are exactly Auto.
+     * If the camera does not honour it (exposure time well over a frame for 600 ms) the held-exposure loop
+     * below takes over instead.
+     */
+    private fun nativeShutterPriority(frameNanos: Long, session: Camera2Session, now: Long) {
+        if (nativeSinceMs == 0L) {
+            nativeSinceMs = now
+            session.setShutterPriority(frameNanos)
+            status.value = "Shutter lock: starting"
+            return
+        }
+        val (time, iso) = session.latestAeSnapshot()
+        if (time == null || iso == null) return
+        status.value = "Shutter lock (camera AE): 1/${NANOS_PER_SECOND / time.coerceAtLeast(1L)} ISO $iso"
+        if (time > frameNanos * NATIVE_FAIL_FRACTION && now - nativeSinceMs > NATIVE_FAIL_AFTER_MS) {
+            nativeFailed = true
+            nativeSinceMs = 0L
+            session.setShutterPriority(null)
+            status.value = "Shutter lock: camera ignores priority, using held exposure"
+        }
     }
 
     /**
@@ -287,6 +322,8 @@ internal class PreviewIsoCap {
         const val AE_STABLE_TOLERANCE = 0.05
         const val AE_LUMA_TAU = 0.2
         const val REANCHOR_AFTER_MS = 150L
+        const val NATIVE_FAIL_FRACTION = 1.15
+        const val NATIVE_FAIL_AFTER_MS = 600L
         const val GAIN_MIN = 0.3
         const val GAIN_MAX = 10.0
         const val SEED_ISO = 400

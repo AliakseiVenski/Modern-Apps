@@ -31,6 +31,14 @@ fun Camera2Session.setIsoCap(timeNs: Long?, iso: Int?) {
 }
 
 
+/** Shutter-priority AE: keeps [timeNs] as the exposure time and lets AE do the rest; null returns to plain AE. */
+fun Camera2Session.setShutterPriority(timeNs: Long?) {
+    executor.execute {
+        controls = controls.copy(shutterPriorityNs = timeNs)
+        issueRepeatingRequest()
+    }
+}
+
 /** True while the user holds exposure (long press); the software ISO cap freezes with it. */
 val Camera2Session.aeLocked: Boolean get() = controls.aeLock
 

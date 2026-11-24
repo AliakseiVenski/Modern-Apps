@@ -61,6 +61,7 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
                 onActiveLens(it)
             }
         }
+        com.vayunmathur.library.log.Log.status("ShutterLock", "AE priority modes on this lens: ${session.characteristics.aePriorityModes}")
         applyVideoPreviewParams()
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }
         viewModelScope.launch { refreshVideoOptions() }

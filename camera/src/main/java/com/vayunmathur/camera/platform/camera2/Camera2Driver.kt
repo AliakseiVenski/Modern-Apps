@@ -233,6 +233,10 @@ internal fun SensorRect.toRect(): Rect = Rect(left, top, right, bottom)
 internal fun MeteringRegion.toMeteringRectangle(): MeteringRectangle =
     MeteringRectangle(rect.toRect(), weight)
 
+/** `CONTROL_AE_PRIORITY_MODE` by name (Android 16 key); 1 = sensor exposure time priority. */
+private val AE_PRIORITY_MODE = CaptureRequest.Key("android.control.aePriorityMode", Int::class.javaObjectType)
+private const val AE_PRIORITY_EXPOSURE_TIME = 1
+
 /** Applies resolved preview controls onto a TEMPLATE_PREVIEW builder. */
 internal fun CaptureRequest.Builder.applyPreviewParams(
     params: ResolvedRequestParams,
@@ -248,6 +252,11 @@ internal fun CaptureRequest.Builder.applyPreviewParams(
         set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         params.manualExposureTimeNs?.let { set(CaptureRequest.SENSOR_EXPOSURE_TIME, it) }
         params.manualSensitivityIso?.let { set(CaptureRequest.SENSOR_SENSITIVITY, it) }
+    } else if (params.shutterPriorityNs != null) {
+        // The camera's own AE (tap, compensation, lens hand-over, picture processing), with the shutter held.
+        set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+        set(AE_PRIORITY_MODE, AE_PRIORITY_EXPOSURE_TIME)
+        set(CaptureRequest.SENSOR_EXPOSURE_TIME, params.shutterPriorityNs)
     } else if (params.isoCapTimeNs != null && params.isoCapIso != null) {
         // Video ISO cap: AE off at one frame of shutter, so the frame duration must be pinned too
         // (a fixed fps range does nothing without AE).

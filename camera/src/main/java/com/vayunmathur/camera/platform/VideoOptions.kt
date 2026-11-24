@@ -9,6 +9,7 @@ import com.vayunmathur.camera.domain.VideoStabilizationPolicy
 import com.vayunmathur.camera.platform.camera2.CharacteristicsFacade
 import com.vayunmathur.camera.platform.camera2.LensCharacteristicsSnapshot
 import com.vayunmathur.camera.platform.camera2.setIsoCap
+import com.vayunmathur.camera.platform.camera2.setShutterPriority
 import com.vayunmathur.camera.platform.camera2.setVideoParams
 import com.vayunmathur.library.log.Log
 import kotlinx.coroutines.Dispatchers
@@ -279,6 +280,7 @@ internal fun CameraViewModel.applyVideoPreviewParams() {
     if (mode !in VIDEO_PREVIEW_MODES) {
         previewIsoCap.configure(null)
         session.setIsoCap(null, null)
+        session.setShutterPriority(null)
         session.setVideoParams(null, null, false)
         return
     }
@@ -287,10 +289,13 @@ internal fun CameraViewModel.applyVideoPreviewParams() {
     session.setVideoParams(plan.fps, plan.stabilization.videoMode, plan.stabilization.opticalOn)
     // The recording has no brightness meter in HDR, so the viewfinder shows no cap there either.
     val cap = if (plan.isoLimit > 0 && !plan.hdr) {
-        IsoCapSetup(plan.fps, snapshot.sensitivityRange?.lower ?: 50, plan.isoLimit)
+        IsoCapSetup(plan.fps, snapshot.sensitivityRange?.lower ?: 50, plan.isoLimit, uncapped = plan.isoLimit >= snapshot.maxEffectiveIso())
     } else {
         null
     }
     previewIsoCap.configure(cap)
-    if (cap == null) session.setIsoCap(null, null)
+    if (cap == null) {
+        session.setIsoCap(null, null)
+        session.setShutterPriority(null)
+    }
 }

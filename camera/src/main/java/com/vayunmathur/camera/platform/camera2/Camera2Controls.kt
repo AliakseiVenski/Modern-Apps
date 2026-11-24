@@ -45,6 +45,8 @@ data class Camera2ControlState(
     /** Exposure picked by the video ISO cap (AE off); a manual exposure from the user wins over it. */
     val isoCapTimeNs: Long? = null,
     val isoCapIso: Int? = null,
+    /** Shutter-priority AE (Android 16): AE on, this exposure time kept, ISO and the rest left to AE. */
+    val shutterPriorityNs: Long? = null,
 ) {
     companion object {
         val DEFAULT = Camera2ControlState()
@@ -86,6 +88,7 @@ data class ResolvedRequestParams(
     val isoCapTimeNs: Long? = null,
     val isoCapIso: Int? = null,
     val isoCapBoost: Int? = null,
+    val shutterPriorityNs: Long? = null,
 )
 
 object Camera2Controls {
@@ -179,6 +182,7 @@ object Camera2Controls {
             isoCapTimeNs = state.isoCapTimeNs,
             isoCapIso = isoCap?.first,
             isoCapBoost = isoCap?.second,
+            shutterPriorityNs = state.shutterPriorityNs,
         )
     }
 

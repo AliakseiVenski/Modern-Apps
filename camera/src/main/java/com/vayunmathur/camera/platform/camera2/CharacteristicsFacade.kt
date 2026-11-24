@@ -107,6 +107,8 @@ data class LensCharacteristicsSnapshot(
     val exposureCompensationEvRange: Range<Float>?,
     val videoStabilizationModes: List<Int>,
     val opticalStabilizationModes: List<Int>,
+    /** `CONTROL_AE_AVAILABLE_PRIORITY_MODES` (Android 16): 1 = AE keeps the requested exposure time and moves ISO. */
+    val aePriorityModes: List<Int> = emptyList(),
     val aeTargetFpsRanges: List<Range<Int>>,
     val streamConfig: StreamConfigSummary,
     val hardwareLevel: Int?,
@@ -304,6 +306,7 @@ class CharacteristicsFacade private constructor(
             exposureCompensationEvRange: Range<Float>? = null,
             videoStabilizationModes: List<Int> = emptyList(),
             opticalStabilizationModes: List<Int> = emptyList(),
+            aePriorityModes: List<Int> = emptyList(),
             aeTargetFpsRanges: List<Range<Int>> = emptyList(),
             sizesByFormat: Map<Int, List<Size>> = emptyMap(),
             hardwareLevel: Int? = null,
@@ -348,6 +351,7 @@ class CharacteristicsFacade private constructor(
                 exposureCompensationEvRange = exposureCompensationEvRange,
                 videoStabilizationModes = videoStabilizationModes,
                 opticalStabilizationModes = opticalStabilizationModes,
+                aePriorityModes = aePriorityModes,
                 aeTargetFpsRanges = aeTargetFpsRanges,
                 streamConfig = StreamConfigSummary.fromSizes(sizesByFormat, surfaceTextureSizes),
                 hardwareLevel = hardwareLevel,
@@ -446,6 +450,11 @@ class CharacteristicsFacade private constructor(
                         get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)?.toList().orEmpty(),
                     opticalStabilizationModes =
                         get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)?.toList().orEmpty(),
+                    // Named key: the constant needs a newer SDK than some builds compile against.
+                    aePriorityModes = runCatching {
+                        get(CameraCharacteristics.Key("android.control.aeAvailablePriorityModes", IntArray::class.java))
+                            ?.toList()
+                    }.getOrNull().orEmpty(),
                     aeTargetFpsRanges =
                         get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)?.toList().orEmpty(),
                     streamConfig = StreamConfigSummary.fromMap(
