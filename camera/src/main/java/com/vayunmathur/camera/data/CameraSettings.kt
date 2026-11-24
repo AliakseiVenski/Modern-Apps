@@ -58,6 +58,9 @@ private fun CameraViewModel.loadCaptureSettings() {
         quality = ds.getString("camera_video_quality")?.takeIf { it.isNotBlank() },
         hdr = ds.getString("camera_video_hdr")?.toBoolean() ?: false,
         isoLimit = ds.getString("camera_video_iso_limit")?.toIntOrNull() ?: 0,
+        // Before the switch existed an ISO limit meant the lock was on.
+        shutterLock = ds.getString("camera_video_shutter_lock")?.toBoolean()
+            ?: ((ds.getString("camera_video_iso_limit")?.toIntOrNull() ?: 0) > 0),
         bitrateMbps = ds.getString("camera_video_bitrate_mbps")?.toIntOrNull() ?: 0,
     )
     ds.getString("camera_custom_zoom_levels")?.let { raw ->
@@ -215,7 +218,14 @@ fun CameraViewModel.setVideoHdr(enabled: Boolean) {
     viewModelScope.launch { ds.setString("camera_video_hdr", enabled.toString()) }
 }
 
-/** Highest ISO the camera may use while filming; 0 = no cap. */
+/** Locks the shutter at 1/fps so the frame rate holds in the dark; ISO then rises up to the limit. */
+fun CameraViewModel.setVideoShutterLock(enabled: Boolean) {
+    videoTuningMutable.update { it.copy(shutterLock = enabled) }
+    applyVideoPreviewParams()
+    viewModelScope.launch { ds.setString("camera_video_shutter_lock", enabled.toString()) }
+}
+
+/** Highest ISO the locked shutter may use while filming; 0 = as high as the lens goes. */
 fun CameraViewModel.setVideoIsoLimit(iso: Int) {
     videoTuningMutable.update { it.copy(isoLimit = iso) }
     applyVideoPreviewParams()

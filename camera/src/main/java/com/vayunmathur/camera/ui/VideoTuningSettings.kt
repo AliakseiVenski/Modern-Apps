@@ -21,6 +21,7 @@ import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoIsoLimit
 import com.vayunmathur.camera.data.setVideoQuality
+import com.vayunmathur.camera.data.setVideoShutterLock
 import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.refreshVideoOptions
@@ -121,20 +122,27 @@ internal fun VideoTuningSettings(viewModel: CameraViewModel) {
         }
     }
 
-    val isoChoices = opts.isoStops.dropLast(1)
-    if (isoChoices.isNotEmpty()) {
-        SettingsSection(title = stringResource(R.string.settings_video_iso_limit)) {
-            Text(
-                stringResource(R.string.settings_video_iso_limit_description),
-                modifier = Modifier.padding(horizontal = 16.dp),
-                style = MaterialTheme.typography.bodySmall,
+    if (opts.isoStops.isNotEmpty()) {
+        SettingsSection(title = stringResource(R.string.settings_video_shutter_lock)) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_video_shutter_lock_description),
+                checked = tuning.shutterLock,
+                onCheckedChange = { viewModel.setVideoShutterLock(it) },
             )
-            ChoiceDropdown(
-                choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
-                    isoChoices.asReversed().map { it to stringResource(R.string.settings_iso_value, it) },
-                selected = tuning.isoLimit,
-                onSelect = { viewModel.setVideoIsoLimit(it) },
-            )
+            val isoChoices = opts.isoStops.dropLast(1)
+            if (tuning.shutterLock && isoChoices.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.settings_video_iso_limit_description),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                ChoiceDropdown(
+                    choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +
+                        isoChoices.asReversed().map { it to stringResource(R.string.settings_iso_value, it) },
+                    selected = tuning.isoLimit,
+                    onSelect = { viewModel.setVideoIsoLimit(it) },
+                )
+            }
         }
     }
 }

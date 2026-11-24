@@ -108,8 +108,11 @@
     <string name="settings_video_hdr_description" tools:ignore="MissingTranslation">Record 10-bit HLG (HEVC) when the camera and encoder support it. No motion-adaptive bitrate or ISO limit while on.</string>
     <string name="settings_video_hdr_short" tools:ignore="MissingTranslation">10-bit HLG, HEVC</string>
     <!-- ISO limit picker -->
+    <string name="settings_video_shutter_lock" tools:ignore="MissingTranslation">Shutter lock</string>
+    <string name="settings_video_shutter_lock_description" tools:ignore="MissingTranslation">Keep the shutter at 1/fps so the frame rate never drops in the dark; ISO rises instead</string>
+    <string name="settings_video_shutter_lock_short" tools:ignore="MissingTranslation">Holds the frame rate in low light</string>
     <string name="settings_video_iso_limit" tools:ignore="MissingTranslation">ISO limit</string>
-    <string name="settings_video_iso_limit_description" tools:ignore="MissingTranslation">Highest ISO the camera may use while filming. Lower keeps noise down but makes dark scenes darker; the shutter stays at 1/fps. Max leaves exposure fully automatic.</string>
+    <string name="settings_video_iso_limit_description" tools:ignore="MissingTranslation">Highest ISO the locked shutter may use. Lower keeps noise down but makes dark scenes darker. Auto lets ISO go as high as the lens allows.</string>
     <string name="settings_video_iso_max" tools:ignore="MissingTranslation">Auto</string>
     <string name="settings_iso_value" translatable="false">ISO %1$d</string>
 

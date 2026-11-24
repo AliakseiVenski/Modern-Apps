@@ -34,6 +34,7 @@ import com.vayunmathur.camera.data.setVideoFps
 import com.vayunmathur.camera.data.setVideoHdr
 import com.vayunmathur.camera.data.setVideoIsoLimit
 import com.vayunmathur.camera.data.setVideoQuality
+import com.vayunmathur.camera.data.setVideoShutterLock
 import com.vayunmathur.camera.data.setVideoStabilizationEnabled
 import com.vayunmathur.camera.platform.CameraViewModel
 import com.vayunmathur.camera.platform.refreshVideoOptions
@@ -123,8 +124,17 @@ internal fun VideoQuickMenu(viewModel: CameraViewModel, onDismiss: () -> Unit) {
                     )
                 }
 
+                if (opts != null && opts.isoStops.isNotEmpty()) {
+                    ToggleCard(
+                        title = stringResource(R.string.settings_video_shutter_lock),
+                        subtitle = stringResource(R.string.settings_video_shutter_lock_short),
+                        checked = tuning.shutterLock,
+                        onCheckedChange = { viewModel.setVideoShutterLock(it) },
+                    )
+                }
+
                 val isoChoices = opts?.isoStops.orEmpty().dropLast(1)
-                if (isoChoices.isNotEmpty()) {
+                if (tuning.shutterLock && isoChoices.isNotEmpty()) {
                     PillRow(
                         title = stringResource(R.string.settings_video_iso_limit),
                         choices = listOf(0 to stringResource(R.string.settings_video_iso_max)) +

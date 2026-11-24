@@ -41,8 +41,8 @@ Starting a take does not reopen the camera. In the video modes the viewfinder is
 ### 1.7 Lens switching in a take
 - Zoom stops are zoom ratios; the HAL swaps physical lens by ratio. During a take, tapping a stop glides the ratio (eased, constant speed in octaves, 0.5-1.2 s) instead of jumping (`platform/CameraControls.kt`, `setZoomRatio(smooth = true)`).
 
-## 2. Exposure with an ISO limit
-"ISO limit" in Settings and the quick panel (pills, biggest first, "Auto" = camera AE) pins the shutter at 1/fps and lets ISO absorb brightness, so fps cannot sag in the dark.
+## 2. Shutter lock and ISO limit
+"Shutter lock" is a switch in Settings and the quick panel (off by default). On, it holds the shutter at 1/fps and lets ISO absorb brightness, so fps cannot sag in the dark, and ISO limit pills appear (biggest first, "Auto" = as high as the lens goes). Off, the camera's AE alone decides. Saved as `camera_video_shutter_lock`; an old ISO limit turns the switch on.
 
 - The camera's own AE runs by default, so a limited picture is exactly Auto (tap, exposure compensation and AE lock work natively). `platform/PreviewIsoCap.kt` watches the AE result: when it asks for at least 0.9 of a frame of shutter (or more ISO than the limit) it takes over with software AE: AE off, `SENSOR_EXPOSURE_TIME` = one frame, `SENSOR_FRAME_DURATION` pinned (`platform/camera2/Camera2Driver.kt`). When the held exposure needs under 0.7 of a frame for 400 ms it hands back to AE (1.5 s dwell between switches).
 - `domain/ShutterPriorityController.kt`: steers metered luma to a target. Smooth for small errors (about 2 stops/s), faster for large ones (up to 8 stops/s), trusts a scene cut at once, and the first reading corrects in one step.

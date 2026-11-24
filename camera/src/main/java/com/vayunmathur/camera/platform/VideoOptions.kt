@@ -19,7 +19,8 @@ import kotlinx.coroutines.withContext
  * automatic (60 when the lens and encoder allow it, else 30); [quality] is a
  * [com.vayunmathur.camera.domain.VideoQualityTier] name (null = best that works);
  * [stabilizationEnabled] asks for EIS on top of OIS where available; [hdr] records 10-bit HLG;
- * [isoLimit] caps the ISO the camera may use (0 = no cap); [bitrateMbps] pins the encoder bitrate
+ * [shutterLock] keeps the shutter at 1/fps (the frame rate holds in the dark, ISO rises instead) and
+ * [isoLimit] then caps that ISO (0 = as high as the lens goes); [bitrateMbps] pins the encoder bitrate
  * (0 = automatic, which adapts to motion, storage and heat).
  */
 data class VideoTuning(
@@ -27,6 +28,7 @@ data class VideoTuning(
     val stabilizationEnabled: Boolean = true,
     val quality: String? = null,
     val hdr: Boolean = false,
+    val shutterLock: Boolean = false,
     val isoLimit: Int = 0,
     val bitrateMbps: Int = 0,
 )
@@ -254,7 +256,12 @@ internal fun CameraViewModel.planVideo(
             sdkInt = Build.VERSION.SDK_INT,
         ),
         hdr = hdr,
-        isoLimit = if (tuning.isoLimit in 1 until maxIso) tuning.isoLimit else 0,
+        // 0 = no lock (the camera's AE alone). With the lock the cap is the chosen ISO, or the lens maximum.
+        isoLimit = when {
+            !tuning.shutterLock || maxIso <= 0 -> 0
+            tuning.isoLimit in 1 until maxIso -> tuning.isoLimit
+            else -> maxIso
+        },
     )
 }
 
