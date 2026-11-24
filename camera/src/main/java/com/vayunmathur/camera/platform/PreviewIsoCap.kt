@@ -16,9 +16,10 @@ import com.vayunmathur.camera.platform.camera2.setIsoCap
 internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int)
 
 /**
- * Keeps the live preview under the user's ISO cap, as the recording engine does for the take: AE off
- * with one frame of shutter, ISO moved smoothly by [ShutterPriorityController] from the mean luma of
- * the analysis stream, never above the cap.
+ * The ISO limit for the live preview. The camera's own AE runs by default, so the picture is exactly Auto.
+ * Only when AE would use more than one frame of shutter (the frame rate would sag) or more ISO than the
+ * limit does [ShutterPriorityController] take over: AE off, shutter pinned at one frame, ISO raised to
+ * keep the brightness AE had, never above the limit. When the scene is bright enough again it hands back.
  */
 internal class PreviewIsoCap {
     private var setup: IsoCapSetup? = null
@@ -26,14 +27,22 @@ internal class PreviewIsoCap {
     private var lastMs = 0L
     private var lastAutoLumaMs = 0L
 
+    /** True while this controller sets the exposure; false while the camera's AE does (the default). */
+    private var manual = false
+    private var modeSinceMs = 0L
+    private var belowSinceMs = 0L
+
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
     fun configure(newSetup: IsoCapSetup?) {
         if (newSetup == setup) return
         setup = newSetup
         controller = null
+        manual = false
+        modeSinceMs = 0L
+        belowSinceMs = 0L
         lastMs = 0L
-        status.value = newSetup?.let { "ISO cap ${it.isoLimit}: waiting for analysis frames" }
+        status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
     /** One line for the debug overlay: null when no cap is set, else whether the viewfinder is metering. */
@@ -44,34 +53,82 @@ internal class PreviewIsoCap {
     fun onYPlane(plane: PlaneView, session: Camera2Session?) {
         val cap = setup ?: return publishAutoLuma(plane)
         session ?: return
-        if (session.aeLocked) {
-            status.value = "ISO cap ${cap.isoLimit}: AE locked"
+        val now = SystemClock.elapsedRealtime()
+        val frameNanos = NANOS_PER_SECOND / cap.fps
+        if (!manual) {
+            watchCameraAe(cap, frameNanos, session, plane, now)
             return
         }
-        val now = SystemClock.elapsedRealtime()
+        if (session.aeLocked) {
+            status.value = "ISO limit ${cap.isoLimit}: AE locked"
+            return
+        }
         val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
         if (since < INTERVAL_MS) return
-        // A tapped point meters its own window (as the HAL's AE does), else the whole frame.
-        val metered = tappedLuma(plane, session)
-            ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) } ?: return
+        val metered = meter(plane, session) ?: return
         lastMs = now
         // Exposure compensation: the exposure control has no AE to nudge, so it steers to a brighter
         // or darker target. Luma follows exposure^(1/2.2), so +1 EV lowers the reading by 2^(1/2.2).
         val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
-        val frameNanos = NANOS_PER_SECOND / cap.fps
         val active = controller ?: newController(cap, frameNanos, session, metered).also {
             controller = it
             command(session, it.current)
         }
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
+        // The scene is bright enough that a one-frame shutter is no longer the limit: hand back to the camera.
+        if (active.current.timeNanos < frameNanos * RELEASE_SHUTTER_FRACTION) {
+            if (belowSinceMs == 0L) belowSinceMs = now
+            if (now - belowSinceMs >= RELEASE_AFTER_MS && now - modeSinceMs >= DWELL_MS) {
+                leaveManual(session, now)
+                return
+            }
+        } else {
+            belowSinceMs = 0L
+        }
         val snapshot = session.characteristics
         val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
             active.current.iso,
             snapshot.sensitivityRange?.upper ?: active.current.iso,
             snapshot.postRawBoostRange?.upper ?: com.vayunmathur.camera.domain.IsoSplit.UNITY_BOOST,
         )
-        status.value = "ISO cap ${cap.isoLimit}: ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
+        status.value = "ISO limit ${cap.isoLimit}: held ISO ${active.current.iso} = sensor $sensorIso x boost $boost%, luma ${luma.toInt()}"
     }
+
+    /**
+     * While the camera's own AE runs the picture is exactly Auto (tap, exposure compensation and AE lock
+     * included). Only when it asks for more than one frame of shutter (it would drop the frame rate) or
+     * for more ISO than the limit does this take over: shutter pinned at one frame, ISO raised instead.
+     */
+    private fun watchCameraAe(cap: IsoCapSetup, frameNanos: Long, session: Camera2Session, plane: PlaneView, now: Long) {
+        val (time, iso) = session.latestAeSnapshot()
+        if (time == null || iso == null) {
+            status.value = "ISO limit ${cap.isoLimit}: waiting for the camera"
+            return
+        }
+        val violating = time >= frameNanos * VIOLATION_SHUTTER_FRACTION
+        val needsCap = time >= frameNanos * ENTER_SHUTTER_FRACTION || iso > cap.isoLimit
+        status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso"
+        if (!needsCap || (!violating && now - modeSinceMs < DWELL_MS)) return
+        if (session.aeLocked) return
+        val metered = meter(plane, session) ?: return
+        manual = true
+        modeSinceMs = now
+        belowSinceMs = 0L
+        lastMs = 0L
+        controller = newController(cap, frameNanos, session, metered).also { command(session, it.current) }
+    }
+
+    private fun leaveManual(session: Camera2Session, now: Long) {
+        manual = false
+        controller = null
+        modeSinceMs = now
+        belowSinceMs = 0L
+        session.setIsoCap(null, null)
+    }
+
+    /** A tapped point meters its own window (as the HAL's AE does), else the whole frame. */
+    private fun meter(plane: PlaneView, session: Camera2Session): Double? =
+        tappedLuma(plane, session) ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) }
 
     /**
      * Starts the controller where the camera's own AE is, and holds the brightness that AE had made (within
@@ -143,6 +200,14 @@ internal class PreviewIsoCap {
         const val ANCHOR_MIN_LUMA = 85.0
         const val ANCHOR_MAX_LUMA = 125.0
         const val MAX_GAP_MS = 200L
+        /** Camera AE at this share of a frame's shutter or more: it is about to cost frame rate. */
+        const val ENTER_SHUTTER_FRACTION = 0.9
+        /** At this share or more it already has: take over without waiting out the dwell. */
+        const val VIOLATION_SHUTTER_FRACTION = 1.2
+        /** Back to the camera's AE once the held exposure needs well under a frame of shutter. */
+        const val RELEASE_SHUTTER_FRACTION = 0.7
+        const val RELEASE_AFTER_MS = 400L
+        const val DWELL_MS = 1500L
         const val SEED_ISO = 400
     }
 }
