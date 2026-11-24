@@ -54,6 +54,16 @@ class ShutterPriorityController(
         return next
     }
 
+    /** Total exposure (shutter time x ISO) the controller currently asks for. */
+    val exposureProduct: Double get() = exposure
+
+    /** Multiplies the exposure (a take-over correction learned earlier) and returns the new setting. */
+    fun scaleExposure(factor: Double): ExposureSetting {
+        exposure = clamp(exposure * factor)
+        current = split(exposure)
+        return current
+    }
+
     /** Treats the next reading as the first: it corrects at once (used once a take-over exposure has landed). */
     fun reanchor() {
         smoothedLuma = -1.0

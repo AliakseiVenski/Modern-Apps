@@ -36,6 +36,11 @@ internal class PreviewIsoCap {
     private var aeLuma = -1.0
     private var aeLumaAtMs = 0L
     private var reanchorAtMs = 0L
+    private var usedGain = 1.0
+    private var learnKey = "default"
+
+    /** Per lens: the exposure factor a take-over needs on top of AE's reported exposure to keep the same picture. */
+    private val takeoverGain = HashMap<String, Double>()
     private var aeStableSinceMs = 0L
     private var belowSinceMs = 0L
 
@@ -85,11 +90,18 @@ internal class PreviewIsoCap {
             controller = it
             command(session, it.current)
         }
-        if (reanchorAtMs != 0L && now >= reanchorAtMs) {
+        val learning = reanchorAtMs != 0L && now >= reanchorAtMs
+        val before = active.exposureProduct
+        if (learning) {
             active.reanchor()
             reanchorAtMs = 0L
         }
         active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
+        if (learning && before > 0.0) {
+            // The one-step correction is the gain a manual request of AE's exposure was missing; remember it.
+            val learned = (usedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
+            takeoverGain[learnKey] = takeoverGain[learnKey]?.let { (it + learned) / 2 } ?: learned
+        }
         // The scene is bright enough that a one-frame shutter is no longer the limit: hand back to the camera.
         if (active.current.timeNanos < frameNanos * RELEASE_SHUTTER_FRACTION) {
             if (belowSinceMs == 0L) belowSinceMs = now
@@ -145,7 +157,14 @@ internal class PreviewIsoCap {
         lastMs = 0L
         // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
         val anchor = aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
-        controller = newController(cap, frameNanos, session, anchor).also { command(session, it.current) }
+        // What a manual request of AE's reported exposure lacks (see below) was learned on earlier take-overs of
+        // this lens: ask for it up front so the picture does not dip first.
+        learnKey = lastPhysicalId ?: "default"
+        usedGain = takeoverGain[learnKey] ?: 1.0
+        controller = newController(cap, frameNanos, session, anchor).also {
+            it.scaleExposure(usedGain)
+            command(session, it.current)
+        }
         // The AE's reported exposure is not what a manual request of the same size gives: once the take-over
         // has landed, re-judge against the brightness AE had and correct at once.
         reanchorAtMs = now + REANCHOR_AFTER_MS
@@ -268,6 +287,8 @@ internal class PreviewIsoCap {
         const val AE_STABLE_TOLERANCE = 0.05
         const val AE_LUMA_TAU = 0.2
         const val REANCHOR_AFTER_MS = 150L
+        const val GAIN_MIN = 0.3
+        const val GAIN_MAX = 10.0
         const val SEED_ISO = 400
     }
 }
