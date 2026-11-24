@@ -1,14 +1,13 @@
 package com.vayunmathur.camera.platform
 
 import android.os.SystemClock
-import com.vayunmathur.camera.domain.ExposureSetting
-import kotlin.math.roundToInt
 import com.vayunmathur.camera.domain.HighlightMetering
 import com.vayunmathur.camera.domain.LumaPlaneMath
 import com.vayunmathur.camera.domain.PlaneView
 import com.vayunmathur.camera.domain.ShutterPriorityController
 import com.vayunmathur.camera.platform.camera2.Camera2Controls
 import com.vayunmathur.camera.platform.camera2.Camera2Session
+import com.vayunmathur.camera.platform.camera2.RawStillMetadata
 import com.vayunmathur.camera.platform.camera2.aeLocked
 import com.vayunmathur.camera.platform.camera2.setIsoCap
 import com.vayunmathur.camera.platform.camera2.setShutterPriority
@@ -17,10 +16,15 @@ import com.vayunmathur.camera.platform.camera2.setShutterPriority
 internal data class IsoCapSetup(val fps: Int, val isoMin: Int, val isoLimit: Int, val uncapped: Boolean = false)
 
 /**
- * The shutter lock for the live preview. The camera's AE runs only until it has found the brightness
- * (about a quarter second); then [ShutterPriorityController] holds the exposure for good: AE off, shutter at
- * one frame (shorter in bright scenes), ISO moved to keep that brightness, never above the limit. Staying
- * in one controller avoids the dip every AE-to-manual switch caused.
+ * The shutter lock for the live preview. The camera's AE runs only until it has found the brightness; then
+ * [ShutterPriorityController] holds the exposure for good (AE off, shutter one frame or shorter, ISO up to
+ * the limit).
+ *
+ * Each analysis frame is judged against the exposure that frame was really taken with (its capture result,
+ * matched by sensor timestamp), never against the last request: the camera applies a request a few frames
+ * late, and judging the latest request is what made earlier versions overshoot, hunt and dip. A lens change
+ * needs nothing special: the first frames of the new lens show its brightness at the known exposure, and
+ * the next request corrects it.
  */
 internal class PreviewIsoCap {
     private var setup: IsoCapSetup? = null
@@ -28,28 +32,20 @@ internal class PreviewIsoCap {
     private var lastMs = 0L
     private var lastAutoLumaMs = 0L
 
-    /** True while this controller sets the exposure; false while the camera's AE does (the default). */
+    /** True while this controller sets the exposure; false while the camera's AE does (start-up). */
     private var manual = false
-    private var lastPhysicalId: String? = null
     private var startedAtMs = 0L
     private var nativeSinceMs = 0L
-    private var lensPair = ""
-    private var lensUsedGain = 1.0
-    private var lensSnapAtMs = 0L
-
-    /** Exposure factor between two physical lenses ("from>to"), learned from earlier switches. */
-    private val lensGain = HashMap<String, Double>()
     private var nativeFailed = false
     private var lastAeProduct = 0.0
+    private var aeStableSinceMs = 0L
     private var aeLuma = -1.0
     private var aeLumaAtMs = 0L
-    private var reanchorAtMs = 0L
-    private var usedGain = 1.0
-    private var learnKey = "default"
 
-    /** Per lens: the exposure factor a take-over needs on top of AE's reported exposure to keep the same picture. */
-    private val takeoverGain = HashMap<String, Double>()
-    private var aeStableSinceMs = 0L
+    /** Exposure (time x effective ISO) of recent frames by sensor timestamp, from their capture results. */
+    private val frameExposure = object : LinkedHashMap<Long, Double>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Double>?) = size > FRAME_HISTORY
+    }
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -58,24 +54,31 @@ internal class PreviewIsoCap {
         setup = newSetup
         controller = null
         manual = false
+        startedAtMs = 0L
         nativeSinceMs = 0L
         nativeFailed = false
         lastMs = 0L
         lastAeProduct = 0.0
         aeLuma = -1.0
         aeLumaAtMs = 0L
-        reanchorAtMs = 0L
-        lensSnapAtMs = 0L
-        startedAtMs = 0L
         status.value = newSetup?.let { "ISO limit ${it.isoLimit}: waiting for the camera" }
     }
 
-    /** One line for the debug overlay: null when no cap is set, else whether the viewfinder is metering. */
+    /** One line for the debug overlay. */
     val status = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Capture result of a preview frame (session executor thread). */
+    @Synchronized
+    fun onFrameResult(raw: RawStillMetadata) {
+        val ts = raw.sensorTimestampNs ?: return
+        val time = raw.exposureTimeNs ?: return
+        val iso = raw.iso ?: return
+        if (time > 0L && iso > 0) frameExposure[ts] = time.toDouble() * iso
+    }
 
     /** One analysis frame of the preview. */
     @Synchronized
-    fun onYPlane(plane: PlaneView, session: Camera2Session?) {
+    fun onYPlane(plane: PlaneView, timestampNs: Long, session: Camera2Session?) {
         val cap = setup ?: return publishAutoLuma(plane)
         session ?: return
         val now = SystemClock.elapsedRealtime()
@@ -84,48 +87,24 @@ internal class PreviewIsoCap {
             nativeShutterPriority(frameNanos, session, now)
             return
         }
-        // Held-exposure path: make sure the native priority mode is not still set from an uncapped stretch.
         if (session.controlState.shutterPriorityNs != null) session.setShutterPriority(null)
         if (!manual) {
             watchCameraAe(cap, frameNanos, session, plane, now)
             return
         }
+        val active = controller ?: return
         if (session.aeLocked) {
             status.value = "ISO limit ${cap.isoLimit}: AE locked"
             return
         }
-        val since = if (lastMs == 0L) INTERVAL_MS else now - lastMs
-        if (since < INTERVAL_MS) return
+        // Only a frame whose real exposure is known can be judged; others (result not in yet) are skipped.
+        val exposure = frameExposure[timestampNs] ?: return
         val metered = meter(plane, session) ?: return
+        val since = if (lastMs == 0L) MIN_DT_MS else (now - lastMs).coerceIn(MIN_DT_MS, MAX_GAP_MS)
         lastMs = now
-        // Exposure compensation: the exposure control has no AE to nudge, so it steers to a brighter
-        // or darker target. Luma follows exposure^(1/2.2), so +1 EV lowers the reading by 2^(1/2.2).
+        // Exposure compensation: no AE to nudge, so the target moves. Luma ~ exposure^(1/2.2).
         val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
-        val active = controller ?: newController(cap, frameNanos, session, metered).also {
-            controller = it
-            command(session, it.current)
-        }
-        val learning = reanchorAtMs != 0L && now >= reanchorAtMs
-        val lensLearning = lensSnapAtMs != 0L && now >= lensSnapAtMs
-        val before = active.exposureProduct
-        if (learning || lensLearning) {
-            active.reanchor()
-            reanchorAtMs = 0L
-            lensSnapAtMs = 0L
-        }
-        active.update(luma, since.coerceAtMost(MAX_GAP_MS) / 1000.0)?.let { command(session, it) }
-        if (lensLearning && before > 0.0) {
-            // Gain between these two lenses: what was applied up front times the correction the picture still needed.
-            val learned = (lensUsedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
-            val blended = lensGain[lensPair]?.let { (it + learned) / 2 } ?: learned
-            lensGain[lensPair] = blended
-            val (from, to) = lensPair.split('>')
-            lensGain["$to>$from"] = 1.0 / blended
-        } else if (learning && before > 0.0) {
-            // The one-step correction is the gain a manual request of AE's exposure was missing; remember it.
-            val learned = (usedGain * active.exposureProduct / before).coerceIn(GAIN_MIN, GAIN_MAX)
-            takeoverGain[learnKey] = takeoverGain[learnKey]?.let { (it + learned) / 2 } ?: learned
-        }
+        active.steer(exposure, luma, since / 1000.0)?.let { session.setIsoCap(it.timeNanos, it.iso) }
         val snapshot = session.characteristics
         val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
             active.current.iso,
@@ -136,57 +115,43 @@ internal class PreviewIsoCap {
     }
 
     /**
-     * While the camera's own AE runs the picture is exactly Auto (tap, exposure compensation and AE lock
-     * included). Only when it asks for more than one frame of shutter (it would drop the frame rate) or
-     * for more ISO than the limit does this take over: shutter pinned at one frame, ISO raised instead.
+     * Start-up: the camera's AE finds the brightness. Once it has held still (or after a moment) the held
+     * exposure takes over for good, starting from AE's exposure and keeping the brightness AE made.
      */
     private fun watchCameraAe(cap: IsoCapSetup, frameNanos: Long, session: Camera2Session, plane: PlaneView, now: Long) {
         val (time, iso) = session.latestAeSnapshot()
-        if (time == null || iso == null) {
+        if (time == null || iso == null || time <= 0L || iso <= 0) {
             status.value = "ISO limit ${cap.isoLimit}: waiting for the camera"
             return
         }
         val product = time.toDouble() * iso
-        // Judged against where it was when it last moved, not frame to frame: AE glides by tiny steps.
         if (lastAeProduct <= 0.0 || kotlin.math.abs(product / lastAeProduct - 1.0) > AE_STABLE_TOLERANCE) {
             aeStableSinceMs = now
             lastAeProduct = product
         }
-        val metered = meter(plane, session)
-        if (metered != null) {
+        meter(plane, session)?.let { metered ->
             val dt = if (aeLumaAtMs == 0L) 0.0 else (now - aeLumaAtMs) / 1000.0
             aeLuma = if (aeLuma < 0.0) metered else aeLuma + (metered - aeLuma) * (1 - kotlin.math.exp(-dt / AE_LUMA_TAU))
             aeLumaAtMs = now
         }
-        status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${(NANOS_PER_SECOND / time.coerceAtLeast(1L))} ISO $iso, starting"
-        // Once the camera's AE has found the brightness (or after a moment), take over for good: no later
-        // switching between AE and the held exposure, which is where the picture used to dip.
+        status.value = "ISO limit ${cap.isoLimit}: camera AE 1/${NANOS_PER_SECOND / time} ISO $iso, starting"
         if (startedAtMs == 0L) startedAtMs = now
         val settled = now - aeStableSinceMs >= AE_STABLE_MS || now - startedAtMs >= START_TIMEOUT_MS
-        if (!settled) return
-        if (session.aeLocked || aeLuma < 0.0) return
+        if (!settled || session.aeLocked || aeLuma < 0.0) return
+        // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
+        val target = (aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA))
+            .coerceIn(ANCHOR_MIN_LUMA, ANCHOR_MAX_LUMA)
+        val start = com.vayunmathur.camera.domain.ExposureSetting(frameNanos, (product / frameNanos).toInt().coerceAtLeast(1))
+        controller = ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, start, target).also {
+            session.setIsoCap(it.current.timeNanos, it.current.iso)
+        }
         manual = true
         lastMs = 0L
-        // AE already applied the exposure compensation to this brightness; the held loop applies it itself.
-        val anchor = aeLuma / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
-        // What a manual request of AE's reported exposure lacks (see below) was learned on earlier take-overs of
-        // this lens: ask for it up front so the picture does not dip first.
-        learnKey = lastPhysicalId ?: "default"
-        usedGain = takeoverGain[learnKey] ?: 1.0
-        controller = newController(cap, frameNanos, session, anchor).also {
-            it.scaleExposure(usedGain)
-            command(session, it.current)
-        }
-        // The AE's reported exposure is not what a manual request of the same size gives: once the take-over
-        // has landed, re-judge against the brightness AE had and correct at once.
-        reanchorAtMs = now + REANCHOR_AFTER_MS
     }
 
     /**
-     * With no ISO ceiling the camera does it all: AE stays on with its exposure time pinned to one frame
-     * (Android 16 shutter-priority AE), so brightness, tap, compensation and lens switches are exactly Auto.
-     * If the camera does not honour it (exposure time well over a frame for 600 ms) the held-exposure loop
-     * below takes over instead.
+     * With no ISO ceiling, where the phone has Android 16 shutter-priority AE, the camera does it all: AE on,
+     * exposure time pinned to one frame. If the camera does not honour it the held exposure is used instead.
      */
     private fun nativeShutterPriority(frameNanos: Long, session: Camera2Session, now: Long) {
         if (nativeSinceMs == 0L) {
@@ -202,45 +167,10 @@ internal class PreviewIsoCap {
             nativeFailed = true
             nativeSinceMs = 0L
             session.setShutterPriority(null)
-            status.value = "Shutter lock: camera ignores priority, using held exposure"
         }
     }
 
-    /** The physical lens in use: a switch scales the held exposure by the factor learned for that lens pair. */
-    @Synchronized
-    fun onPhysicalLens(id: String, session: Camera2Session) {
-        val previous = lastPhysicalId
-        lastPhysicalId = id
-        if (previous == null || previous == id) return
-        val now = SystemClock.elapsedRealtime()
-        val active = controller
-        if (!manual || active == null) return
-        // The same exposure gives another brightness on the new lens (aperture, sensor). Apply what an earlier
-        // switch between these lenses taught, now; the first frames on the new lens then confirm or refine it.
-        lensPair = "$previous>$id"
-        lensUsedGain = lensGain[lensPair] ?: 1.0
-        command(session, active.scaleExposure(lensUsedGain))
-        lensSnapAtMs = now + LENS_SNAP_AFTER_MS
-    }
-
-    /** A tapped point meters its own window (as the HAL's AE does), else the whole frame. */
-    private fun meter(plane: PlaneView, session: Camera2Session): Double? =
-        tappedLuma(plane, session) ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) }
-
-    /**
-     * Starts the controller where the camera's own AE is, and holds the brightness that AE had made (within
-     * sane bounds): limiting the ISO then keeps the picture as it was instead of re-judging the scene.
-     */
-    private fun newController(cap: IsoCapSetup, frameNanos: Long, session: Camera2Session, metered: Double): ShutterPriorityController {
-        val aeKnown = session.latestAeSnapshot().let { (time, iso) -> time != null && iso != null && time > 0L && iso > 0 }
-        val target = if (aeKnown) metered.coerceIn(ANCHOR_MIN_LUMA, ANCHOR_MAX_LUMA) else ShutterPriorityController.TARGET_LUMA
-        return ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, seed(session, frameNanos), target)
-    }
-
-    private fun command(session: Camera2Session, setting: ExposureSetting) =
-        session.setIsoCap(setting.timeNanos, setting.iso)
-
-    /** Without a cap the overlay still shows the frame's luma, to compare Auto with a limit. */
+    /** Without a cap the overlay still shows the frame's luma, to compare Auto with the lock. */
     private fun publishAutoLuma(plane: PlaneView) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastAutoLumaMs < AUTO_LUMA_INTERVAL_MS) return
@@ -249,17 +179,9 @@ internal class PreviewIsoCap {
         status.value = "Auto ISO: luma ${luma.toInt()}"
     }
 
-    /**
-     * Where the exposure starts: what the camera's own AE is using right now, so the viewfinder picks up
-     * from the scene it already shows instead of climbing from a fixed ISO. A fixed seed only when no
-     * frame result has arrived yet.
-     */
-    private fun seed(session: Camera2Session, frameNanos: Long): ExposureSetting {
-        val (timeNs, iso) = session.latestAeSnapshot()
-        if (timeNs == null || iso == null || timeNs <= 0L || iso <= 0) return ExposureSetting(frameNanos, SEED_ISO)
-        // One frame of shutter with the equal total exposure; the controller clamps and splits it.
-        return ExposureSetting(frameNanos, (timeNs.toDouble() * iso / frameNanos).roundToInt().coerceAtLeast(1))
-    }
+    /** A tapped point meters its own window (as the HAL's AE does), else the whole frame. */
+    private fun meter(plane: PlaneView, session: Camera2Session): Double? =
+        tappedLuma(plane, session) ?: LumaPlaneMath.grid(plane)?.first?.let { HighlightMetering.effectiveLuma(it) }
 
     /** Mean luma of the tapped AE window on the analysis plane, or null when no point is metered. */
     private fun tappedLuma(plane: PlaneView, session: Camera2Session): Double? {
@@ -292,22 +214,17 @@ internal class PreviewIsoCap {
         const val WINDOW_STEP = 4
         const val LUMA_GAMMA = 2.2
         const val NANOS_PER_SECOND = 1_000_000_000L
-        const val INTERVAL_MS = 33L
+        const val MIN_DT_MS = 16L
+        const val MAX_GAP_MS = 200L
+        const val FRAME_HISTORY = 32
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0
-        const val MAX_GAP_MS = 200L
         const val AE_STABLE_MS = 250L
-        /** The held exposure starts after this long at the latest, even if AE is still moving. */
         const val START_TIMEOUT_MS = 1500L
         const val AE_STABLE_TOLERANCE = 0.05
         const val AE_LUMA_TAU = 0.2
-        const val REANCHOR_AFTER_MS = 150L
         const val NATIVE_FAIL_FRACTION = 1.15
         const val NATIVE_FAIL_AFTER_MS = 600L
-        const val LENS_SNAP_AFTER_MS = 130L
-        const val GAIN_MIN = 0.1
-        const val GAIN_MAX = 10.0
-        const val SEED_ISO = 400
     }
 }

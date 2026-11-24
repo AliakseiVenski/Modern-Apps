@@ -154,7 +154,7 @@ internal fun CameraScreenEffects(
                 }
                 viewModel.setAnalysisSink { frame ->
                     motion.onYPlane(frame.yPlane)
-                    viewModel.previewIsoCap.onYPlane(frame.yPlane, viewModel.activeCamera2Session)
+                    viewModel.previewIsoCap.onYPlane(frame.yPlane, frame.timestampNs, viewModel.activeCamera2Session)
                 }
             }
             state.isPhotoType -> {

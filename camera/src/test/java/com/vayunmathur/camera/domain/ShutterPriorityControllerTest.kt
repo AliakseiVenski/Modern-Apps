@@ -64,6 +64,27 @@ class ShutterPriorityControllerTest {
         assertTrue(worstRatio < 1.4, "largest per-update ISO change was $worstRatio")
     }
 
+    @Test fun steerAimsAtTheFramesExposureNotTheLastRequest() {
+        val c = ShutterPriorityController(frame, 50, 102_400, ExposureSetting(frame, 400), targetLuma = 100.0)
+        val frameExposure = frame.toDouble() * 400
+        // Luma at half the target: the frame needed about 2 stops more. Requests in flight do not change that,
+        // so feeding the same frame again and again never goes past it.
+        repeat(50) { c.steer(frameExposure, 50.0, 0.033) }
+        assertEquals(1600.0, c.current.iso.toDouble(), 80.0)
+    }
+
+    @Test fun steerTakesALensSizedJumpAtOnce() {
+        val c = ShutterPriorityController(frame, 50, 102_400, ExposureSetting(frame, 200), targetLuma = 100.0)
+        val first = c.steer(frame.toDouble() * 200, 25.0, 0.033)
+        assertNotNull(first)
+        assertTrue(first.iso > 2500, "only reached ${first.iso}")
+    }
+
+    @Test fun steerHoldsStillOnTarget() {
+        val c = ShutterPriorityController(frame, 50, 102_400, ExposureSetting(frame, 400), targetLuma = 100.0)
+        assertNull(c.steer(frame.toDouble() * 400, 100.5, 0.033))
+    }
+
     @Test fun anAnchoredTargetHoldsThatLumaInsteadOfTheDefault() {
         val c = ShutterPriorityController(frame, 50, 3200, ExposureSetting(frame, 400), targetLuma = 120.0)
         assertNull(c.update(120.0, dt))

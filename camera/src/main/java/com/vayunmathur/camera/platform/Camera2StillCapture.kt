@@ -56,10 +56,8 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
         if (!session.characteristics.isLogicalMultiCamera) onActiveLens(session.characteristics.cameraId)
         session.previewFrameObserver = { raw ->
             debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
-            raw.physicalCameraId?.let {
-                previewIsoCap.onPhysicalLens(it, session)
-                onActiveLens(it)
-            }
+            previewIsoCap.onFrameResult(raw)
+            raw.physicalCameraId?.let { onActiveLens(it) }
         }
         com.vayunmathur.library.log.Log.status("ShutterLock", "AE priority modes on this lens: ${session.characteristics.aePriorityModes}")
         applyVideoPreviewParams()

@@ -54,19 +54,25 @@ class ShutterPriorityController(
         return next
     }
 
-    /** Total exposure (shutter time x ISO) the controller currently asks for. */
-    val exposureProduct: Double get() = exposure
-
-    /** Multiplies the exposure (a take-over correction learned earlier) and returns the new setting. */
-    fun scaleExposure(factor: Double): ExposureSetting {
-        exposure = clamp(exposure * factor)
-        current = split(exposure)
-        return current
-    }
-
-    /** Treats the next reading as the first: it corrects at once (used once a take-over exposure has landed). */
-    fun reanchor() {
-        smoothedLuma = -1.0
+    /**
+     * Feedback against the exposure the measured frame was really taken with ([frameExposure], time x ISO
+     * from its capture result), not against the last request. The exposure that would put this frame on
+     * target is fixed whatever requests are still in flight, so steering toward it cannot overshoot because
+     * of the camera's few frames of delay. The request glides there ([STEER_TAU]); a jump of more than
+     * [CUT_STOPS] (a lens change, a scene cut) is taken in one step.
+     */
+    fun steer(frameExposure: Double, meanLuma: Double, dtSeconds: Double): ExposureSetting? {
+        val luma = meanLuma.coerceAtLeast(MIN_LUMA)
+        val errorStops = (STEER_GAMMA * log2(targetLuma / luma)).coerceIn(-MAX_ERROR_STOPS, MAX_ERROR_STOPS)
+        val desired = clamp(frameExposure * 2.0.pow(errorStops))
+        val gap = log2(desired / exposure)
+        if (abs(gap) < STEER_DEADBAND_STOPS) return null
+        val fraction = if (abs(gap) >= CUT_STOPS) 1.0 else 1 - exp(-dtSeconds / STEER_TAU)
+        exposure = clamp(exposure * 2.0.pow(gap * fraction))
+        val next = split(exposure)
+        if (next == current) return null
+        current = next
+        return next
     }
 
     private fun log2(x: Double) = ln(x) / ln(2.0)
@@ -100,6 +106,13 @@ class ShutterPriorityController(
         private const val FAST_ERROR_STOPS = 4.0
         private const val FIRST_STEP_MAX_STOPS = 8.0
         private const val CUT_RATIO = 2.2
+
+        /** Tone curve slope used by [steer]: a stop of exposure moves luma by about half a stop. */
+        private const val STEER_GAMMA = 2.0
+        private const val MAX_ERROR_STOPS = 4.0
+        private const val STEER_TAU = 0.12
+        private const val STEER_DEADBAND_STOPS = 0.04
+        private const val CUT_STOPS = 1.0
         private const val DEADBAND_STOPS = 0.08
         private const val MIN_TIME_NANOS = 50_000.0
     }
