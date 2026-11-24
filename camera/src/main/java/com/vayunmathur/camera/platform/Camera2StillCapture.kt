@@ -56,7 +56,10 @@ internal fun CameraViewModel.registerCamera2Session(session: Camera2Session?) {
         if (!session.characteristics.isLogicalMultiCamera) onActiveLens(session.characteristics.cameraId)
         session.previewFrameObserver = { raw ->
             debug.onFrame(raw.sensorTimestampNs, raw.exposureTimeNs, raw.iso, raw.focalLengthMm)
-            raw.physicalCameraId?.let { onActiveLens(it) }
+            raw.physicalCameraId?.let {
+                previewIsoCap.onPhysicalLens(it, session)
+                onActiveLens(it)
+            }
         }
         applyVideoPreviewParams()
         viewModelScope.launch { refreshCapabilities(session.characteristics.cameraId) }

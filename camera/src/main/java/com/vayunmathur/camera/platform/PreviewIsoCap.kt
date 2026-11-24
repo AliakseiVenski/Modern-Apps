@@ -30,6 +30,7 @@ internal class PreviewIsoCap {
     /** True while this controller sets the exposure; false while the camera's AE does (the default). */
     private var manual = false
     private var modeSinceMs = 0L
+    private var lastPhysicalId: String? = null
     private var belowSinceMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
@@ -116,6 +117,21 @@ internal class PreviewIsoCap {
         belowSinceMs = 0L
         lastMs = 0L
         controller = newController(cap, frameNanos, session, metered).also { command(session, it.current) }
+    }
+
+    /**
+     * A lens change changes how much light the same shutter and ISO give (aperture, sensor), so a held
+     * exposure is wrong on the new lens and the picture jumps. The camera's AE knows the lenses: hand
+     * over to it at once, and take the exposure back from its result a moment later (see [watchCameraAe]).
+     */
+    @Synchronized
+    fun onPhysicalLens(id: String, session: Camera2Session) {
+        val previous = lastPhysicalId
+        lastPhysicalId = id
+        if (previous == null || previous == id || !manual || setup == null) return
+        val now = SystemClock.elapsedRealtime()
+        leaveManual(session, now)
+        modeSinceMs = now - DWELL_MS + LENS_REENTRY_MS
     }
 
     private fun leaveManual(session: Camera2Session, now: Long) {
@@ -208,6 +224,8 @@ internal class PreviewIsoCap {
         const val RELEASE_SHUTTER_FRACTION = 0.7
         const val RELEASE_AFTER_MS = 400L
         const val DWELL_MS = 1500L
+        /** After a lens change the camera's AE gets this long before the held exposure may resume. */
+        const val LENS_REENTRY_MS = 350L
         const val SEED_ISO = 400
     }
 }
