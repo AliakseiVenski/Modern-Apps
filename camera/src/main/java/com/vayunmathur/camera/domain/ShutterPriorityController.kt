@@ -45,7 +45,7 @@ class ShutterPriorityController(
         // The first reading corrects at once (a camera just opened has no exposure to glide from);
         // after that the rate grows with the error, so a big change is quick and a small one is smooth.
         val maxStep = if (first) FIRST_STEP_MAX_STOPS else stopsPerSecond(abs(errorStops)) * dtSeconds
-        val response = if (first) 1.0 else 1 - exp(-dtSeconds / EXPOSURE_TAU)
+        val response = if (first) 1.0 else minOf(1 - exp(-dtSeconds / EXPOSURE_TAU), MAX_RESPONSE)
         val step = (errorStops * response).coerceIn(-maxStep, maxStep)
         exposure = clamp(exposure * 2.0.pow(step))
         val next = split(exposure)
@@ -73,12 +73,15 @@ class ShutterPriorityController(
         /** Luma follows exposure roughly as exposure^(1/2.2), so a luma error of n stops needs 2.2n stops of exposure. */
         private const val GAMMA = 2.2
         private const val LUMA_TAU = 0.1
-        private const val EXPOSURE_TAU = 0.3
-        private const val BASE_STOPS_PER_SECOND = 3.0
-        private const val MAX_STOPS_PER_SECOND = 8.0
+        private const val EXPOSURE_TAU = 0.4
+        private const val BASE_STOPS_PER_SECOND = 2.0
+        private const val MAX_STOPS_PER_SECOND = 5.0
+
+        /** Share of the remaining error corrected per step: below 1 so the delay of the camera cannot make it overshoot. */
+        private const val MAX_RESPONSE = 0.25
         private const val FAST_ERROR_STOPS = 4.0
         private const val FIRST_STEP_MAX_STOPS = 8.0
-        private const val CUT_RATIO = 1.6
+        private const val CUT_RATIO = 2.2
         private const val DEADBAND_STOPS = 0.08
         private const val MIN_TIME_NANOS = 50_000.0
     }

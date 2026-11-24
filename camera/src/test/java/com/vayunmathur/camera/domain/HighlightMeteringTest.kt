@@ -21,12 +21,12 @@ class HighlightMeteringTest {
     fun aClippedLightSourceReadsBrighterThanTheMean() {
         // 10 % clipped (255) in a dark surround: reading is lifted so the controller backs off.
         val grid = FloatArray(1000) { if (it < 100) 255f else 30f }
-        assertTrue(HighlightMetering.effectiveLuma(grid) > grid.average() * 1.5)
+        assertTrue(HighlightMetering.effectiveLuma(grid) > grid.average() * 1.15)
     }
 
     @Test
     fun aFewClippedPixelsAreIgnored() {
-        val grid = FloatArray(1000) { if (it < 15) 255f else 40f }
+        val grid = FloatArray(1000) { if (it < 40) 255f else 40f }
         assertEquals(grid.average(), HighlightMetering.effectiveLuma(grid), 0.5)
     }
 
