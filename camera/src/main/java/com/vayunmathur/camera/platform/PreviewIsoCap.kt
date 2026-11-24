@@ -52,6 +52,13 @@ internal class PreviewIsoCap {
     /** Zoom ratios each physical lens has been seen serving (min to max), to predict a switch. */
     private val lensZoom = HashMap<String, Pair<Float, Float>>()
 
+    /**
+     * Frames seen per (lens, zoom in hundredths). The lens a zoom ratio really runs on is the one seen there
+     * most: ranges alone overlap, because the old lens keeps showing for a few frames at the new ratio while
+     * the camera switches (the log had the ultra-wide 'at 1.0x', which hid every switch to the main lens).
+     */
+    private val lensAtZoom = HashMap<Pair<String, Int>, Int>()
+
     /** Relative sensitivity of each physical lens, in stops, measured across switches. */
     private val lensStops = HashMap<String, Double>()
 
@@ -71,6 +78,7 @@ internal class PreviewIsoCap {
     private var predictedProduct = 0.0
     private var lensSeenAtMs = 0L
     private var exposureSeenAtMs = 0L
+    private var predictedAtMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -100,6 +108,8 @@ internal class PreviewIsoCap {
         if (lens != null && zoom != null) {
             val seen = lensZoom[lens]
             lensZoom[lens] = if (seen == null) zoom to zoom else minOf(seen.first, zoom) to maxOf(seen.second, zoom)
+            val key = lens to zoomBucket(zoom)
+            lensAtZoom[key] = (lensAtZoom[key] ?: 0) + 1
         }
         val ts = raw.sensorTimestampNs ?: return
         val time = raw.exposureTimeNs ?: return
@@ -242,8 +252,11 @@ internal class PreviewIsoCap {
         // each would compound (that blew frames out or black).
         if (!manual || expectedLens != null) return null
         val current = lastLens ?: return null
-        val target = lensZoom.entries.filter { ratio >= it.value.first - ZOOM_MARGIN && ratio <= it.value.second + ZOOM_MARGIN }
-            .map { it.key }.let { if (current in it) current else it.singleOrNull() } ?: return null
+        val bucket = zoomBucket(ratio)
+        val target = lensAtZoom.entries.filter { it.key.second == bucket }.maxByOrNull { it.value }?.key?.first
+            ?: lensZoom.entries.filter { ratio >= it.value.first && ratio <= it.value.second }
+                .map { it.key }.let { if (current in it) current else it.singleOrNull() }
+            ?: return null
         if (target == current) return null
         val from = lensStops[current] ?: return null
         val to = lensStops[target] ?: return null
@@ -257,6 +270,7 @@ internal class PreviewIsoCap {
             "predict $current->$target at ${ratio}x: ${"%.2f".format(from - to)} stops, ISO ${setting.iso}, zoom wait ${zoomDelayMs()} ms",
         )
         predictedProduct = setting.timeNanos.toDouble() * setting.iso
+        predictedAtMs = now
         lensSeenAtMs = 0L
         exposureSeenAtMs = 0L
         return setting
@@ -278,6 +292,12 @@ internal class PreviewIsoCap {
 
     /** First result from the new lens vs first result with the predicted exposure: their gap corrects the wait. */
     private fun calibrateSwitch(lens: String?, product: Double, now: Long) {
+        // Only this switch's own frames count: a match seconds later belongs to something else (the log had
+        // 'landed 22188 ms after', which pinned the wait at its maximum and made the next switches flash).
+        if (now - predictedAtMs > CALIBRATION_WINDOW_MS) {
+            predictedProduct = 0.0
+            return
+        }
         if (lensSeenAtMs == 0L && lens != null && lens == expectedLens) lensSeenAtMs = now
         if (exposureSeenAtMs == 0L && kotlin.math.abs(product / predictedProduct - 1.0) < SWITCH_MATCH) exposureSeenAtMs = now
         if (lensSeenAtMs == 0L || exposureSeenAtMs == 0L) return
@@ -290,6 +310,8 @@ internal class PreviewIsoCap {
     }
 
     private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
+
+    private fun zoomBucket(ratio: Float) = kotlin.math.round(ratio * 100f).toInt()
 
     /** Without a cap the overlay still shows the frame's luma, to compare Auto with the lock. */
     private fun publishAutoLuma(plane: PlaneView) {
@@ -340,14 +362,12 @@ internal class PreviewIsoCap {
         const val FRAME_HISTORY = 32
         const val LENS_GAMMA = 2.0
         val USABLE_LUMA = 12.0..235.0
-        /** No margin: a glide shows the old lens up to just under the switch ratio, and a margin made a stop
-         * exactly at the switch look like the old lens (no prediction, the flash in the recordings). */
-        const val ZOOM_MARGIN = 0f
         const val EXPECT_TIMEOUT_MS = 400L
         const val DEFAULT_ZOOM_DELAY_MS = 70L
         const val MAX_ZOOM_DELAY_MS = 300L
         const val SWITCH_GAIN = 0.8
         const val SWITCH_MATCH = 0.03
+        const val CALIBRATION_WINDOW_MS = 600L
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0
