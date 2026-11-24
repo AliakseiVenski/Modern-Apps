@@ -185,7 +185,8 @@ internal fun Camera2Preview(
         if (session != null) onSessionChanged(session)
         sessionHolder.deliverPendingError()
     }
-    LaunchedEffect(session, zoomRatio) { session?.setZoomRatio(zoomRatio) }
+    // Zoom for a new session only: later changes go through the ViewModel, which times them against the exposure.
+    LaunchedEffect(session) { session?.setZoomRatio(zoomRatio) }
     LaunchedEffect(session, torchOn) { session?.setTorch(torchOn) }
     // Exposure compensation is applied by the screen's effect in EV stops (scaled to the lens's range);
     // the raw slider value must not be pushed here too, or the two writers fight over one control.

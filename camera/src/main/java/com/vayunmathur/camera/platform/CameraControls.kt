@@ -1,7 +1,7 @@
 package com.vayunmathur.camera.platform
 
 import com.vayunmathur.camera.platform.camera2.clearMetering
-import com.vayunmathur.camera.platform.camera2.setZoomAndIsoCap
+import com.vayunmathur.camera.platform.camera2.setIsoCap
 import com.vayunmathur.camera.platform.camera2.tapToFocus
 import com.vayunmathur.library.log.Log
 import androidx.lifecycle.viewModelScope
@@ -78,7 +78,19 @@ private fun CameraViewModel.pushZoomRatio(ratio: Float) {
 /** Zoom to the camera; with the shutter lock, a predicted lens switch carries its exposure in the same request. */
 private fun CameraViewModel.sendZoom(session: com.vayunmathur.camera.platform.camera2.Camera2Session, ratio: Float) {
     val exposure = previewIsoCap.exposureForZoom(ratio)
-    if (exposure != null) session.setZoomAndIsoCap(ratio, exposure.timeNanos, exposure.iso) else session.setZoomRatio(ratio)
+    if (exposure == null) {
+        session.setZoomRatio(ratio)
+        return
+    }
+    // The exposure goes first and the zoom follows by the measured difference in how fast each takes effect,
+    // so the new lens's first frame and the new exposure coincide.
+    session.setIsoCap(exposure.timeNanos, exposure.iso)
+    val delayMs = previewIsoCap.zoomDelayMs()
+    viewModelScope.launch {
+        if (delayMs > 0) delay(delayMs)
+        previewIsoCap.onZoomSent()
+        session.setZoomRatio(ratio)
+    }
 }
 
 private fun CameraViewModel.applyZoomRatio(ratio: Float) {

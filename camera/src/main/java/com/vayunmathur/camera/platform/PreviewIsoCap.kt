@@ -62,6 +62,12 @@ internal class PreviewIsoCap {
     private var expectedLens: String? = null
     private var expectUntilMs = 0L
 
+    /** Exposure requests not yet seen in a result: (time x ISO, sent at). Their round trip is the exposure delay. */
+    private val pendingCommands = ArrayDeque<Pair<Double, Long>>()
+    private var exposureLatencyMs = DEFAULT_EXPOSURE_LATENCY_MS.toDouble()
+    private var zoomLatencyMs = DEFAULT_ZOOM_LATENCY_MS.toDouble()
+    private var zoomSentAtMs = 0L
+
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
     fun configure(newSetup: IsoCapSetup?) {
@@ -95,6 +101,12 @@ internal class PreviewIsoCap {
         val time = raw.exposureTimeNs ?: return
         val iso = raw.iso ?: return
         if (time > 0L && iso > 0) frames[ts] = FrameInfo(time.toDouble() * iso, lens)
+        val now = SystemClock.elapsedRealtime()
+        if (time > 0L && iso > 0) measureExposureLatency(time.toDouble() * iso, now)
+        if (zoomSentAtMs != 0L && lens != null && lens == expectedLens) {
+            zoomLatencyMs += (now - zoomSentAtMs - zoomLatencyMs) * LATENCY_BLEND
+            zoomSentAtMs = 0L
+        }
     }
 
     /** One analysis frame of the preview. */
@@ -132,7 +144,7 @@ internal class PreviewIsoCap {
         lastMs = now
         // Exposure compensation: no AE to nudge, so the target moves. Luma ~ exposure^(1/2.2).
         val luma = metered / Math.pow(2.0, session.controlState.exposureCompEv / LUMA_GAMMA)
-        active.steer(exposure, luma, since / 1000.0)?.let { session.setIsoCap(it.timeNanos, it.iso) }
+        active.steer(exposure, luma, since / 1000.0)?.let { command(session, it) }
         val snapshot = session.characteristics
         val (sensorIso, boost) = com.vayunmathur.camera.domain.IsoSplit.split(
             active.current.iso,
@@ -171,7 +183,7 @@ internal class PreviewIsoCap {
             .coerceIn(ANCHOR_MIN_LUMA, ANCHOR_MAX_LUMA)
         val start = com.vayunmathur.camera.domain.ExposureSetting(frameNanos, (product / frameNanos).toInt().coerceAtLeast(1))
         controller = ShutterPriorityController(frameNanos, cap.isoMin, cap.isoLimit, start, target).also {
-            session.setIsoCap(it.current.timeNanos, it.current.iso)
+            command(session, it.current)
         }
         manual = true
         lastMs = 0L
@@ -233,9 +245,42 @@ internal class PreviewIsoCap {
         if (target == current) return null
         val from = lensStops[current] ?: return null
         val to = lensStops[target] ?: return null
+        val now = SystemClock.elapsedRealtime()
         expectedLens = target
-        expectUntilMs = SystemClock.elapsedRealtime() + EXPECT_TIMEOUT_MS
-        return active.scaleExposure(Math.pow(2.0, from - to))
+        expectUntilMs = now + zoomDelayMs() + EXPECT_TIMEOUT_MS
+        val setting = active.scaleExposure(Math.pow(2.0, from - to))
+        logCommand(setting, now)
+        return setting
+    }
+
+    /**
+     * How long the zoom must wait after the exposure so both land on the same frame: the camera switches
+     * lens faster than it applies a new exposure, measured on this phone from request to result.
+     */
+    @Synchronized
+    fun zoomDelayMs(): Long = (exposureLatencyMs - zoomLatencyMs).toLong().coerceIn(0L, MAX_ZOOM_DELAY_MS)
+
+    /** The zoom of a predicted switch is going out now. */
+    @Synchronized
+    fun onZoomSent() {
+        zoomSentAtMs = SystemClock.elapsedRealtime()
+    }
+
+    private fun command(session: Camera2Session, setting: com.vayunmathur.camera.domain.ExposureSetting) {
+        session.setIsoCap(setting.timeNanos, setting.iso)
+        logCommand(setting, SystemClock.elapsedRealtime())
+    }
+
+    private fun logCommand(setting: com.vayunmathur.camera.domain.ExposureSetting, now: Long) {
+        pendingCommands.addLast(setting.timeNanos.toDouble() * setting.iso to now)
+        while (pendingCommands.size > MAX_PENDING) pendingCommands.removeFirst()
+    }
+
+    private fun measureExposureLatency(product: Double, now: Long) {
+        val hit = pendingCommands.indexOfLast { kotlin.math.abs(it.first / product - 1.0) < LATENCY_MATCH }
+        if (hit < 0) return
+        exposureLatencyMs += (now - pendingCommands[hit].second - exposureLatencyMs) * LATENCY_BLEND
+        repeat(hit + 1) { pendingCommands.removeFirst() }
     }
 
     private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
@@ -291,6 +336,12 @@ internal class PreviewIsoCap {
         val USABLE_LUMA = 12.0..235.0
         const val ZOOM_MARGIN = 0.02f
         const val EXPECT_TIMEOUT_MS = 400L
+        const val DEFAULT_EXPOSURE_LATENCY_MS = 100L
+        const val DEFAULT_ZOOM_LATENCY_MS = 30L
+        const val MAX_ZOOM_DELAY_MS = 250L
+        const val LATENCY_BLEND = 0.3
+        const val LATENCY_MATCH = 0.01
+        const val MAX_PENDING = 64
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0
