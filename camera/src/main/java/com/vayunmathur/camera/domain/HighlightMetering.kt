@@ -12,16 +12,16 @@ object HighlightMetering {
     const val CLIP_START = 235f
 
     /** Share of clipped pixels tolerated before the reading is pushed up. */
-    const val CLIP_ALLOWED = 0.05
+    const val CLIP_ALLOWED = 0.03
 
     /** Reading increase per unit of clipped share above [CLIP_ALLOWED]. */
-    const val CLIP_GAIN = 4.0
+    const val CLIP_GAIN = 8.0
 
     /**
      * The reading never rises by more than this factor. A hard lift makes the control swing: a window
      * near the clip level flips between 0 % and 30 % clipped on a small exposure change.
      */
-    const val MAX_FACTOR = 1.4
+    const val MAX_FACTOR = 1.8
 
     /** Metered luma (0..255 scale) for a downsampled luma [grid]; 0 for an empty grid. */
     fun effectiveLuma(grid: FloatArray): Double {

@@ -26,7 +26,7 @@ class HighlightMeteringTest {
 
     @Test
     fun aFewClippedPixelsAreIgnored() {
-        val grid = FloatArray(1000) { if (it < 40) 255f else 40f }
+        val grid = FloatArray(1000) { if (it < 25) 255f else 40f }
         assertEquals(grid.average(), HighlightMetering.effectiveLuma(grid), 0.5)
     }
 

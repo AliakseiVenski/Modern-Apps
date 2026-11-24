@@ -386,7 +386,7 @@ internal class PreviewIsoCap {
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         /** The held picture comes out brighter than AE's at the same analysis luma, so the anchor is capped lower. */
-        const val ANCHOR_MAX_LUMA = 115.0
+        const val ANCHOR_MAX_LUMA = 100.0
         const val FLICKER_50HZ = 1
         const val FLICKER_60HZ = 2
         const val AE_STABLE_MS = 250L
