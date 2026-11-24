@@ -222,6 +222,7 @@ internal class PreviewIsoCap {
             val base = lensStops.getOrPut(previous) { 0.0 }
             val measured = base + stepStops
             lensStops[lens] = lensStops[lens]?.let { (it + measured) / 2 } ?: measured
+            com.vayunmathur.library.log.Log.status("LensSwitch", "seen $previous->$lens: ${"%.2f".format(stepStops)} stops, zoom ranges $lensZoom")
         }
         if (lens != null) {
             lastLens = lens
@@ -251,6 +252,10 @@ internal class PreviewIsoCap {
         expectUntilMs = now + zoomDelayMs() + EXPECT_TIMEOUT_MS
         zoomHoldUntilMs = now + zoomDelayMs()
         val setting = active.scaleExposure(Math.pow(2.0, from - to))
+        com.vayunmathur.library.log.Log.status(
+            "LensSwitch",
+            "predict $current->$target at ${ratio}x: ${"%.2f".format(from - to)} stops, ISO ${setting.iso}, zoom wait ${zoomDelayMs()} ms",
+        )
         predictedProduct = setting.timeNanos.toDouble() * setting.iso
         lensSeenAtMs = 0L
         exposureSeenAtMs = 0L
@@ -277,6 +282,10 @@ internal class PreviewIsoCap {
         if (exposureSeenAtMs == 0L && kotlin.math.abs(product / predictedProduct - 1.0) < SWITCH_MATCH) exposureSeenAtMs = now
         if (lensSeenAtMs == 0L || exposureSeenAtMs == 0L) return
         zoomDelay = (zoomDelay + (exposureSeenAtMs - lensSeenAtMs) * SWITCH_GAIN).coerceIn(0.0, MAX_ZOOM_DELAY_MS.toDouble())
+        com.vayunmathur.library.log.Log.status(
+            "LensSwitch",
+            "landed: exposure ${exposureSeenAtMs - lensSeenAtMs} ms after the lens, next wait ${zoomDelay.toLong()} ms",
+        )
         predictedProduct = 0.0
     }
 
@@ -331,7 +340,9 @@ internal class PreviewIsoCap {
         const val FRAME_HISTORY = 32
         const val LENS_GAMMA = 2.0
         val USABLE_LUMA = 12.0..235.0
-        const val ZOOM_MARGIN = 0.02f
+        /** No margin: a glide shows the old lens up to just under the switch ratio, and a margin made a stop
+         * exactly at the switch look like the old lens (no prediction, the flash in the recordings). */
+        const val ZOOM_MARGIN = 0f
         const val EXPECT_TIMEOUT_MS = 400L
         const val DEFAULT_ZOOM_DELAY_MS = 70L
         const val MAX_ZOOM_DELAY_MS = 300L
