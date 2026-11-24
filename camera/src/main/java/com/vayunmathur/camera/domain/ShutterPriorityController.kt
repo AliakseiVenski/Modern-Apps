@@ -72,8 +72,8 @@ class ShutterPriorityController(
 
         /** Luma follows exposure roughly as exposure^(1/2.2), so a luma error of n stops needs 2.2n stops of exposure. */
         private const val GAMMA = 2.2
-        private const val LUMA_TAU = 0.08
-        private const val EXPOSURE_TAU = 0.2
+        private const val LUMA_TAU = 0.1
+        private const val EXPOSURE_TAU = 0.3
         private const val BASE_STOPS_PER_SECOND = 3.0
         private const val MAX_STOPS_PER_SECOND = 8.0
         private const val FAST_ERROR_STOPS = 4.0
