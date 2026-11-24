@@ -92,7 +92,6 @@ private fun CameraViewModel.sendZoom(session: com.vayunmathur.camera.platform.ca
     camera2RecordingState.zoomHoldJob = viewModelScope.launch {
         if (waitMs > 0) delay(waitMs)
         camera2RecordingState.zoomHoldJob = null
-        previewIsoCap.onZoomSent()
         session.setZoomRatio(camera2RecordingState.heldZoomRatio)
     }
 }

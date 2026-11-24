@@ -62,11 +62,15 @@ internal class PreviewIsoCap {
     private var expectedLens: String? = null
     private var expectUntilMs = 0L
 
-    /** Exposure requests not yet seen in a result: (time x ISO, sent at). Their round trip is the exposure delay. */
-    private val pendingCommands = ArrayDeque<Pair<Double, Long>>()
-    private var exposureLatencyMs = DEFAULT_EXPOSURE_LATENCY_MS.toDouble()
-    private var zoomLatencyMs = DEFAULT_ZOOM_LATENCY_MS.toDouble()
-    private var zoomSentAtMs = 0L
+    /**
+     * How long the zoom waits after a predicted switch's exposure. Calibrated on every switch from what the
+     * results show: when the new lens's first frame arrives before the new exposure, the wait grows by the
+     * gap; when after, it shrinks.
+     */
+    private var zoomDelay = DEFAULT_ZOOM_DELAY_MS.toDouble()
+    private var predictedProduct = 0.0
+    private var lensSeenAtMs = 0L
+    private var exposureSeenAtMs = 0L
 
     /** Applies a new cap (null = none); restarts the controller when it changed. */
     @Synchronized
@@ -101,12 +105,7 @@ internal class PreviewIsoCap {
         val time = raw.exposureTimeNs ?: return
         val iso = raw.iso ?: return
         if (time > 0L && iso > 0) frames[ts] = FrameInfo(time.toDouble() * iso, lens)
-        val now = SystemClock.elapsedRealtime()
-        if (time > 0L && iso > 0) measureExposureLatency(time.toDouble() * iso, now)
-        if (zoomSentAtMs != 0L && lens != null && lens == expectedLens) {
-            zoomLatencyMs += (now - zoomSentAtMs - zoomLatencyMs) * LATENCY_BLEND
-            zoomSentAtMs = 0L
-        }
+        if (predictedProduct > 0.0) calibrateSwitch(lens, time.toDouble() * iso, SystemClock.elapsedRealtime())
     }
 
     /** One analysis frame of the preview. */
@@ -252,42 +251,33 @@ internal class PreviewIsoCap {
         expectUntilMs = now + zoomDelayMs() + EXPECT_TIMEOUT_MS
         zoomHoldUntilMs = now + zoomDelayMs()
         val setting = active.scaleExposure(Math.pow(2.0, from - to))
-        logCommand(setting, now)
+        predictedProduct = setting.timeNanos.toDouble() * setting.iso
+        lensSeenAtMs = 0L
+        exposureSeenAtMs = 0L
         return setting
     }
 
     /**
      * How long the zoom must wait after the exposure so both land on the same frame: the camera switches
-     * lens faster than it applies a new exposure, measured on this phone from request to result.
+     * lens faster than it applies a new exposure; calibrated from each switch's results ([calibrateSwitch]).
      */
     @Synchronized
-    fun zoomDelayMs(): Long = (exposureLatencyMs - zoomLatencyMs).toLong().coerceIn(0L, MAX_ZOOM_DELAY_MS)
+    fun zoomDelayMs(): Long = zoomDelay.toLong().coerceIn(0L, MAX_ZOOM_DELAY_MS)
 
     /** Until when zoom requests must wait so they do not overtake the predicted switch's exposure. */
     @Volatile
     var zoomHoldUntilMs = 0L
 
-    /** The zoom of a predicted switch is going out now. */
-    @Synchronized
-    fun onZoomSent() {
-        zoomSentAtMs = SystemClock.elapsedRealtime()
-    }
-
-    private fun command(session: Camera2Session, setting: com.vayunmathur.camera.domain.ExposureSetting) {
+    private fun command(session: Camera2Session, setting: com.vayunmathur.camera.domain.ExposureSetting) =
         session.setIsoCap(setting.timeNanos, setting.iso)
-        logCommand(setting, SystemClock.elapsedRealtime())
-    }
 
-    private fun logCommand(setting: com.vayunmathur.camera.domain.ExposureSetting, now: Long) {
-        pendingCommands.addLast(setting.timeNanos.toDouble() * setting.iso to now)
-        while (pendingCommands.size > MAX_PENDING) pendingCommands.removeFirst()
-    }
-
-    private fun measureExposureLatency(product: Double, now: Long) {
-        val hit = pendingCommands.indexOfLast { kotlin.math.abs(it.first / product - 1.0) < LATENCY_MATCH }
-        if (hit < 0) return
-        exposureLatencyMs += (now - pendingCommands[hit].second - exposureLatencyMs) * LATENCY_BLEND
-        repeat(hit + 1) { pendingCommands.removeFirst() }
+    /** First result from the new lens vs first result with the predicted exposure: their gap corrects the wait. */
+    private fun calibrateSwitch(lens: String?, product: Double, now: Long) {
+        if (lensSeenAtMs == 0L && lens != null && lens == expectedLens) lensSeenAtMs = now
+        if (exposureSeenAtMs == 0L && kotlin.math.abs(product / predictedProduct - 1.0) < SWITCH_MATCH) exposureSeenAtMs = now
+        if (lensSeenAtMs == 0L || exposureSeenAtMs == 0L) return
+        zoomDelay = (zoomDelay + (exposureSeenAtMs - lensSeenAtMs) * SWITCH_GAIN).coerceIn(0.0, MAX_ZOOM_DELAY_MS.toDouble())
+        predictedProduct = 0.0
     }
 
     private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
@@ -343,12 +333,10 @@ internal class PreviewIsoCap {
         val USABLE_LUMA = 12.0..235.0
         const val ZOOM_MARGIN = 0.02f
         const val EXPECT_TIMEOUT_MS = 400L
-        const val DEFAULT_EXPOSURE_LATENCY_MS = 100L
-        const val DEFAULT_ZOOM_LATENCY_MS = 30L
-        const val MAX_ZOOM_DELAY_MS = 250L
-        const val LATENCY_BLEND = 0.3
-        const val LATENCY_MATCH = 0.01
-        const val MAX_PENDING = 64
+        const val DEFAULT_ZOOM_DELAY_MS = 70L
+        const val MAX_ZOOM_DELAY_MS = 300L
+        const val SWITCH_GAIN = 0.8
+        const val SWITCH_MATCH = 0.03
         const val AUTO_LUMA_INTERVAL_MS = 300L
         const val ANCHOR_MIN_LUMA = 60.0
         const val ANCHOR_MAX_LUMA = 160.0
