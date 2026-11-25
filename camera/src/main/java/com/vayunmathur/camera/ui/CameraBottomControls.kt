@@ -19,6 +19,7 @@ import com.vayunmathur.camera.platform.stopBurst
 import com.vayunmathur.camera.platform.togglePauseRecording
 import androidx.compose.ui.res.stringResource
 import com.vayunmathur.camera.R
+import com.vayunmathur.camera.data.dropGoneLastCapture
 import com.vayunmathur.library.ui.ExternalIntents
 import com.vayunmathur.library.ui.rememberMessenger
 import com.vayunmathur.library.util.NavBackStack
@@ -40,6 +41,9 @@ internal fun CameraBottomControls(
 ) {
     val context = LocalContext.current
     val cameraMode = state.cameraMode
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        viewModel.dropGoneLastCapture()
+    }
 
     // A last-capture URI can be stale (image deleted) or absent (nothing shot
     // this session). Verify it still resolves, else open the gallery collection;

@@ -322,6 +322,17 @@ internal fun CameraViewModel.setLastCaptureUri(uri: Uri?) {
     viewModelScope.launch { ds.setString("camera_last_capture", uri?.toString() ?: "") }
 }
 
+/** Clears the last-capture thumbnail when its item is gone; MediaStore queries skip trashed rows, direct id access does not. */
+internal fun CameraViewModel.dropGoneLastCapture() {
+    val uri = lastCaptureUriMutable.value ?: return
+    viewModelScope.launch {
+        val live = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { app.contentResolver.query(uri, null, null, null, null)?.use { it.count > 0 } }.getOrNull() ?: false
+        }
+        if (!live && lastCaptureUriMutable.value == uri) setLastCaptureUri(null)
+    }
+}
+
 @android.annotation.SuppressLint("MissingPermission")
 fun CameraViewModel.updateLocation() {
     if (!locationEnabledMutable.value) return
