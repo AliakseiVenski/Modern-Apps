@@ -322,12 +322,22 @@ internal fun CameraViewModel.setLastCaptureUri(uri: Uri?) {
     viewModelScope.launch { ds.setString("camera_last_capture", uri?.toString() ?: "") }
 }
 
-/** Clears the last-capture thumbnail when its item is gone; MediaStore queries skip trashed rows, direct id access does not. */
+/** Clears the last-capture thumbnail when its item is gone or in the MediaStore trash (direct id access still loads trashed items). */
 internal fun CameraViewModel.dropGoneLastCapture() {
     val uri = lastCaptureUriMutable.value ?: return
     viewModelScope.launch {
         val live = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { app.contentResolver.query(uri, null, null, null, null)?.use { it.count > 0 } }.getOrNull() ?: false
+            val args = android.os.Bundle().apply {
+                putInt(android.provider.MediaStore.QUERY_ARG_MATCH_TRASHED, android.provider.MediaStore.MATCH_INCLUDE)
+            }
+            val cols = arrayOf(android.provider.MediaStore.MediaColumns.IS_TRASHED)
+            val live = runCatching {
+                app.contentResolver.query(uri, cols, args, null)?.use { c ->
+                    c.moveToFirst() && c.getInt(0) == 0
+                }
+            }.getOrNull()
+            Log.status("LastCapture", "$uri live=$live")
+            live ?: runCatching { app.contentResolver.query(uri, null, null, null, null)?.use { it.count > 0 } }.getOrNull() ?: false
         }
         if (!live && lastCaptureUriMutable.value == uri) setLastCaptureUri(null)
     }
